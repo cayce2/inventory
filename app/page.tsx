@@ -1,117 +1,87 @@
-import React from "react";
+'use client'
+import { useState } from 'react';
 import Link from "next/link";
-import { Package2, BarChart3, Clock, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, BarChart2, Package, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
+  const [hoveredFeature, setHoveredFeature] = useState(null);
+
   const features = [
     {
-      icon: <Package2 className="h-6 w-6" />,
-      title: "Stock Management",
-      description: "Track inventory levels in real-time with automated alerts and notifications"
-    },
-    {
-      icon: <BarChart3 className="h-6 w-6" />,
+      icon: <BarChart2 className="w-6 h-6" />,
       title: "Analytics Dashboard",
-      description: "Gain insights with comprehensive reporting and trend analysis"
+      description: "Get real-time insights into your inventory performance"
     },
     {
-      icon: <Clock className="h-6 w-6" />,
+      icon: <Package className="w-6 h-6" />,
+      title: "Stock Management",
+      description: "Track and manage your inventory levels effortlessly"
+    },
+    {
+      icon: <Clock className="w-6 h-6" />,
       title: "Real-time Updates",
-      description: "Stay synchronized with instant updates across all devices"
-    },
-    {
-      icon: <Users className="h-6 w-6" />,
-      title: "Team Collaboration",
-      description: "Work seamlessly with your team through shared access and roles"
+      description: "Stay informed with instant stock level notifications"
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      {/* Navigation */}
-      <nav className="border-b bg-white/50 backdrop-blur-sm fixed w-full z-10">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="font-bold text-xl text-slate-900">InventoryPro</div>
-          <div className="space-x-2">
-            <Button variant="ghost" asChild>
-              <Link href="/login">Login</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
-
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
       {/* Hero Section */}
-      <div className="container mx-auto px-4">
-        <div className="pt-32 pb-20 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6">
-            Manage Inventory
-            <span className="text-blue-600"> Smarter</span>
+      <div className="container mx-auto px-4 pt-20 pb-32">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+            Inventory Manager
           </h1>
-          <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
-            Streamline your inventory management with our powerful, easy-to-use platform. 
-            Track, analyze, and optimize your stock in real-time.
+          <p className="text-xl text-gray-600 mb-12 leading-relaxed">
+            Streamline your inventory management process with our powerful and easy-to-use system.
+            Track stock levels, manage billing, and gain insights into your business performance.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="text-lg" asChild>
-              <Link href="/signup">Start Free Trial</Link>
-            </Button>
-            <Button size="lg" variant="outline" className="text-lg" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Link 
+              href="/login" 
+              className="group relative inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-8 rounded-full text-lg transition-all duration-300 w-full sm:w-auto"
+            >
+              Get Started
+              <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
+            </Link>
+            <Link
+              href="/signup"
+              className="group inline-flex items-center justify-center bg-white hover:bg-gray-50 text-gray-800 font-medium py-3 px-8 rounded-full text-lg border-2 border-gray-200 transition-all duration-300 w-full sm:w-auto"
+            >
+              Sign Up Free
+            </Link>
           </div>
         </div>
+      </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 py-12">
+      {/* Features Section */}
+      <div className="container mx-auto px-4 pb-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {features.map((feature, index) => (
-            <Card key={index} className="border-none shadow-lg shadow-slate-200">
-              <CardContent className="pt-6">
-                <div className="rounded-full bg-blue-100 w-12 h-12 flex items-center justify-center mb-4">
-                  <div className="text-blue-600">{feature.icon}</div>
+            <Card 
+              key={index}
+              className={`relative overflow-hidden transition-all duration-300 transform hover:scale-105 ${
+                hoveredFeature === index ? 'shadow-lg' : 'shadow-md'
+              }`}
+              onMouseLeave={() => setHoveredFeature(null)}
+            >
+              <CardContent className="p-6">
+                <div className="mb-4 text-blue-600">
+                  {feature.icon}
                 </div>
-                <h3 className="font-semibold text-lg mb-2 text-slate-900">
+                <h3 className="text-xl font-semibold mb-2">
                   {feature.title}
                 </h3>
-                <p className="text-slate-600">
+                <p className="text-gray-600">
                   {feature.description}
                 </p>
               </CardContent>
             </Card>
           ))}
         </div>
-
-        {/* Stats Section */}
-        <div className="py-20 text-center">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="space-y-2">
-              <div className="text-4xl font-bold text-blue-600">10k+</div>
-              <div className="text-slate-600">Active Users</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-4xl font-bold text-blue-600">1M+</div>
-              <div className="text-slate-600">Items Tracked</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-4xl font-bold text-blue-600">99.9%</div>
-              <div className="text-slate-600">Uptime</div>
-            </div>
-          </div>
-        </div>
       </div>
-
-      {/* Footer */}
-      <footer className="border-t bg-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-slate-600">
-            © 2025 InventoryPro. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
