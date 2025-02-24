@@ -1,100 +1,116 @@
-import Image from "next/image";
+import React from "react";
+import Link from "next/link";
+import { Package2, BarChart3, Clock, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const features = [
+    {
+      icon: <Package2 className="h-6 w-6" />,
+      title: "Stock Management",
+      description: "Track inventory levels in real-time with automated alerts and notifications"
+    },
+    {
+      icon: <BarChart3 className="h-6 w-6" />,
+      title: "Analytics Dashboard",
+      description: "Gain insights with comprehensive reporting and trend analysis"
+    },
+    {
+      icon: <Clock className="h-6 w-6" />,
+      title: "Real-time Updates",
+      description: "Stay synchronized with instant updates across all devices"
+    },
+    {
+      icon: <Users className="h-6 w-6" />,
+      title: "Team Collaboration",
+      description: "Work seamlessly with your team through shared access and roles"
+    }
+  ];
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+      {/* Navigation */}
+      <nav className="border-b bg-white/50 backdrop-blur-sm fixed w-full z-10">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="font-bold text-xl text-slate-900">InventoryPro</div>
+          <div className="space-x-2">
+            <Button variant="ghost" asChild>
+              <Link href="/login">Login</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/signup">Get Started</Link>
+            </Button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </nav>
+
+      {/* Hero Section */}
+      <div className="container mx-auto px-4">
+        <div className="pt-32 pb-20 text-center">
+          <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6">
+            Manage Inventory
+            <span className="text-blue-600"> Smarter</span>
+          </h1>
+          <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
+            Streamline your inventory management with our powerful, easy-to-use platform. 
+            Track, analyze, and optimize your stock in real-time.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="text-lg" asChild>
+              <Link href="/signup">Start Free Trial</Link>
+            </Button>
+            <Button size="lg" variant="outline" className="text-lg" asChild>
+              <Link href="/login">Sign In</Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 py-12">
+          {features.map((feature, index) => (
+            <Card key={index} className="border-none shadow-lg shadow-slate-200">
+              <CardContent className="pt-6">
+                <div className="rounded-full bg-blue-100 w-12 h-12 flex items-center justify-center mb-4">
+                  <div className="text-blue-600">{feature.icon}</div>
+                </div>
+                <h3 className="font-semibold text-lg mb-2 text-slate-900">
+                  {feature.title}
+                </h3>
+                <p className="text-slate-600">
+                  {feature.description}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Stats Section */}
+        <div className="py-20 text-center">
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="space-y-2">
+              <div className="text-4xl font-bold text-blue-600">10k+</div>
+              <div className="text-slate-600">Active Users</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-4xl font-bold text-blue-600">1M+</div>
+              <div className="text-slate-600">Items Tracked</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-4xl font-bold text-blue-600">99.9%</div>
+              <div className="text-slate-600">Uptime</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t bg-white">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center text-slate-600">
+            © 2025 InventoryPro. All rights reserved.
+          </div>
+        </div>
       </footer>
     </div>
   );
