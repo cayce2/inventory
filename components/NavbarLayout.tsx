@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Menu, Sun, Moon, LayoutDashboard, Package, CreditCard, LogOut } from "lucide-react"
+import { Menu, Sun, Moon, LayoutDashboard, Package, CreditCard, File, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -65,6 +65,13 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
       >
         <CreditCard size={18} />
         <span>Billing</span>
+      </Link>
+      <Link 
+        href="/reports" 
+        className="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors"
+      >
+        <File size={18} />
+        <span>reports</span>
       </Link>
     </>
   )
