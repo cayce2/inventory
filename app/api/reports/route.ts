@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
-import { ObjectId } from "mongodb"
+import * as XLSX from "xlsx"
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,75 +11,171 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const period = searchParams.get("period") || "week"
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    const inventory = await db.collection("inventory").find({ userId }).toArray()
+
+    // Calculate total income for different time periods
+    const now = new Date()
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+    const invoices = await db
+      .collection("invoices")
+      .find({
+        userId,
+        status: "paid",
+      })
+      .toArray()
+
+    const totalIncome = {
+      day: invoices
+        .filter((invoice) => new Date(invoice.createdAt) >= dayAgo)
+        .reduce((sum, invoice) => sum + invoice.amount, 0),
+      week: invoices
+        .filter((invoice) => new Date(invoice.createdAt) >= weekAgo)
+        .reduce((sum, invoice) => sum + invoice.amount, 0),
+      month: invoices
+        .filter((invoice) => new Date(invoice.createdAt) >= monthAgo)
+        .reduce((sum, invoice) => sum + invoice.amount, 0),
+      allTime: invoices.reduce((sum, invoice) => sum + invoice.amount, 0),
+    }
+
+    // Fetch unpaid invoices
+    const unpaidInvoices = await db
+      .collection("invoices")
+      .find({
+        userId,
+        status: "unpaid",
+      })
+      .toArray()
+
+    // Create a worksheet for inventory
+    const inventoryWs = XLSX.utils.json_to_sheet(
+      inventory.map((item) => ({
+        Name: item.name,
+        Quantity: item.quantity,
+        Price: item.price,
+        "Low Stock Threshold": item.lowStockThreshold,
+        "Total Value": item.quantity * item.price,
+      })),
+    )
+
+    // Create a worksheet for total income
+    const incomeWs = XLSX.utils.json_to_sheet([
+      { Period: "Day", Income: totalIncome.day },
+      { Period: "Week", Income: totalIncome.week },
+      { Period: "Month", Income: totalIncome.month },
+      { Period: "All Time", Income: totalIncome.allTime },
+    ])
+
+    // Create a worksheet for unpaid invoices
+    const unpaidInvoicesWs = XLSX.utils.json_to_sheet(
+      unpaidInvoices.map((invoice) => ({
+        "Customer Name": invoice.customerName,
+        "Customer Phone": invoice.customerPhone,
+        "Invoice Number": invoice.invoiceNumber,
+        Amount: invoice.amount,
+        "Due Date": new Date(invoice.dueDate).toLocaleDateString(),
+        Items: invoice.items.map((item: { name: any; quantity: any }) => `${item.name} (${item.quantity})`).join(", "),
+      })),
+    )
+
+    // Create a workbook and add the worksheets
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, inventoryWs, "Inventory Report")
+    XLSX.utils.book_append_sheet(wb, incomeWs, "Total Income")
+    XLSX.utils.book_append_sheet(wb, unpaidInvoicesWs, "Unpaid Invoices")
+
+    // Generate buffer
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" })
+
+    // Set the appropriate headers for file download
+    const headers = new Headers()
+    headers.append("Content-Disposition", 'attachment; filename="inventory_income_and_unpaid_invoices_report.xlsx"')
+    headers.append("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    return new NextResponse(excelBuffer, {
+      status: 200,
+      headers: headers,
+    })
+  } catch (error) {
+    console.error("Error generating report:", error)
+    return NextResponse.json({ error: "An error occurred while generating the report" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const userId = await authMiddleware(req)
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { period } = await req.json()
 
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    const currentDate = new Date()
-    let startDate: Date
+    const now = new Date()
+    let startDate
 
     switch (period) {
       case "day":
-        startDate = new Date(currentDate.setHours(0, 0, 0, 0))
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         break
       case "week":
-        startDate = new Date(currentDate.setDate(currentDate.getDate() - 7))
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         break
       case "month":
-        startDate = new Date(currentDate.setMonth(currentDate.getMonth() - 1))
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case "all":
+        startDate = new Date(0) // Beginning of time
         break
       default:
-        startDate = new Date(currentDate.setDate(currentDate.getDate() - 7))
+        return NextResponse.json({ error: "Invalid period" }, { status: 400 })
     }
 
-    const [totalSales, unpaidInvoices, lowStockItems] = await Promise.all([
-      db
-        .collection("invoices")
-        .aggregate([
-          {
-            $match: {
-              userId: new ObjectId(userId),
-              createdAt: { $gte: startDate },
-              status: "paid",
-            },
+    const totalIncome = await db
+      .collection("invoices")
+      .aggregate([
+        {
+          $match: {
+            userId,
+            status: "paid",
+            createdAt: { $gte: startDate },
           },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: "$amount" },
-            },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$amount" },
           },
-        ])
-        .toArray(),
-      db
-        .collection("invoices")
-        .find({
-          userId: new ObjectId(userId),
-          status: "unpaid",
-        })
-        .toArray(),
-      db
-        .collection("inventory")
-        .find({
-          userId: new ObjectId(userId),
-          quantity: { $lt: 5 },
-        })
-        .toArray(),
-    ])
+        },
+      ])
+      .toArray()
 
-    const reportData = {
-      totalSales: totalSales[0]?.total || 0,
-      unpaidInvoices,
-      lowStockItems,
-      period,
-    }
+    const unpaidInvoices = await db
+      .collection("invoices")
+      .find({
+        userId,
+        status: "unpaid",
+      })
+      .toArray()
 
-    return NextResponse.json(reportData, { status: 200 })
+    return NextResponse.json(
+      {
+        totalIncome: totalIncome[0]?.total || 0,
+        unpaidInvoices,
+      },
+      { status: 200 },
+    )
   } catch (error) {
-    console.error("Error generating report:", error)
-    return NextResponse.json({ error: "An error occurred while generating the report" }, { status: 500 })
+    console.error("Error fetching report data:", error)
+    return NextResponse.json({ error: "An error occurred while fetching report data" }, { status: 500 })
   }
 }
 
