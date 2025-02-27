@@ -1,12 +1,14 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client'
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import NavbarLayout from "@/components/NavbarLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -15,9 +17,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, DollarSign, AlertCircle, FileText } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { Package, DollarSign, AlertCircle, FileText, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DashboardStats {
   totalItems: number;
@@ -28,17 +32,17 @@ interface DashboardStats {
   }>;
   totalIncome: number;
   unpaidInvoices: number;
+  trendData: Array<{ name: string; value: number }>; // added this to match the structure of trend data
 }
 
-// Mock data for the trend chart - in real app, fetch from API
-const trendData = [
-  { name: 'Jan', value: 2400 },
-  { name: 'Feb', value: 1398 },
-  { name: 'Mar', value: 9800 },
-  { name: 'Apr', value: 3908 },
-  { name: 'May', value: 4800 },
-  { name: 'Jun', value: 3800 },
-];
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<any>;
+  color: string;
+  bgColor: string;
+  loading: boolean;
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -46,9 +50,11 @@ export default function Dashboard() {
     lowStockItems: [],
     totalIncome: 0,
     unpaidInvoices: 0,
+    trendData: [], // Initialize the trendData
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
   const router = useRouter();
 
   useEffect(() => {
@@ -81,19 +87,21 @@ export default function Dashboard() {
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, color, loading }: any) => (
-    <Card>
-      <CardContent className="pt-6">
+  const StatCard = ({ title, value, icon: Icon, color, bgColor, loading }: StatCardProps) => (
+    <Card className={`border-none shadow-md ${bgColor}`}>
+      <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-500">{title}</p>
+            <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
             {loading ? (
-              <Skeleton className="h-8 w-24 mt-2" />
+              <Skeleton className="h-8 w-24" />
             ) : (
               <p className={`text-2xl font-bold ${color}`}>{value}</p>
             )}
           </div>
-          <Icon className={`h-8 w-8 ${color} opacity-80`} />
+          <div className={`p-3 rounded-full bg-white/20`}>
+            <Icon className={`h-6 w-6 ${color}`} />
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -101,115 +109,165 @@ export default function Dashboard() {
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <button 
-            onClick={fetchDashboardStats}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Refresh Data
-          </button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header section */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Dashboard</h1>
+              <p className="text-gray-500 mt-1">Welcome back! Here&apos;s your business overview</p>
+            </div>
+            <Button 
+              onClick={fetchDashboardStats}
+              variant="outline"
+              className="flex items-center gap-2 px-4 py-2 border border-blue-200 bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all shadow-sm"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh Data
+            </Button>
+          </div>
 
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+          {/* Error alert */}
+          {error && (
+            <Alert variant="destructive" className="mb-6 animate-in fade-in-50 duration-300">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            title="Total Items"
-            value={stats.totalItems}
-            icon={Package}
-            color="text-blue-600"
-            loading={loading}
-          />
-          <StatCard
-            title="Low Stock Items"
-            value={stats.lowStockItems.length}
-            icon={AlertCircle}
-            color="text-yellow-600"
-            loading={loading}
-          />
-          <StatCard
-            title="Total Income"
-            value={`$${stats.totalIncome.toFixed(2)}`}
-            icon={DollarSign}
-            color="text-green-600"
-            loading={loading}
-          />
-          <StatCard
-            title="Unpaid Invoices"
-            value={stats.unpaidInvoices}
-            icon={FileText}
-            color="text-red-600"
-            loading={loading}
-          />
-        </div>
+          {/* Stats cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatCard
+              title="Total Inventory"
+              value={stats.totalItems}
+              icon={Package}
+              color="text-blue-600"
+              bgColor="bg-blue-50"
+              loading={loading}
+            />
+            <StatCard
+              title="Low Stock Items"
+              value={stats.lowStockItems.length}
+              icon={AlertCircle}
+              color="text-amber-600"
+              bgColor="bg-amber-50"
+              loading={loading}
+            />
+            <StatCard
+              title="Total Revenue"
+              value={`$${stats.totalIncome.toFixed(2)}`}
+              icon={DollarSign}
+              color="text-emerald-600"
+              bgColor="bg-emerald-50"
+              loading={loading}
+            />
+            <StatCard
+              title="Unpaid Invoices"
+              value={stats.unpaidInvoices}
+              icon={FileText}
+              color="text-rose-600"
+              bgColor="bg-rose-50"
+              loading={loading}
+            />
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Revenue Trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData}>
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="value" 
-                      stroke="#2563eb" 
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Low Stock Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {stats.lowStockItems.map((item) => (
-                      <TableRow key={item._id}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Low Stock
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          {/* Main content with tabs */}
+          <Tabs defaultValue="overview" className="mb-8" onValueChange={setActiveTab}>
+            <TabsList className="grid grid-cols-2 md:w-fit mb-6">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="inventory">Inventory</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-6">
+              <Card className="overflow-hidden shadow-lg border-none">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 pb-2">
+                  <CardTitle>Revenue Trend</CardTitle>
+                  <CardDescription>Monthly revenue for the past 6 months</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="h-[300px]">
+                    {loading ? (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Skeleton className="h-[250px] w-full rounded-lg" />
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={stats.trendData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="name" stroke="#9CA3AF" />
+                          <YAxis stroke="#9CA3AF" />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'white', 
+                              borderRadius: '8px', 
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              border: 'none'
+                            }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#4F46E5" 
+                            strokeWidth={3}
+                            dot={{ stroke: '#4F46E5', strokeWidth: 2, fill: 'white', r: 4 }}
+                            activeDot={{ stroke: '#4F46E5', strokeWidth: 2, fill: '#4F46E5', r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="inventory" className="space-y-6">
+              <Card className="shadow-lg border-none overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 pb-2">
+                  <CardTitle>Low Stock Items</CardTitle>
+                  <CardDescription>Items that need to be restocked soon</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : stats.lowStockItems.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Package className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                      <p className="text-gray-600">No low stock items found</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg overflow-hidden border border-gray-100">
+                      <Table>
+                        <TableHeader className="bg-gray-50">
+                          <TableRow>
+                            <TableHead className="font-semibold">Item Name</TableHead>
+                            <TableHead className="font-semibold">Quantity</TableHead>
+                            <TableHead className="font-semibold">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.lowStockItems.map((item) => (
+                            <TableRow key={item._id} className="hover:bg-gray-50 transition-colors">
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              <TableCell>{item.quantity}(remaining)</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100">
+                                  Low Stock
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </NavbarLayout>
