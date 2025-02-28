@@ -648,7 +648,7 @@ export default function Billing() {
                               </div>
                             </TableCell>
                             <TableCell className="font-medium">
-                              ${invoice.amount.toFixed(2)}
+                              KES {invoice.amount.toFixed(2)}
                             </TableCell>
                             <TableCell>
                               {new Date(invoice.dueDate).toLocaleDateString('en-US', {

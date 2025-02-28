@@ -155,7 +155,7 @@ export default function Dashboard() {
             />
             <StatCard
               title="Total Revenue"
-              value={`$${stats.totalIncome.toFixed(2)}`}
+              value={`KES ${stats.totalIncome.toFixed(2)}`}
               icon={DollarSign}
               color="text-emerald-600"
               bgColor="bg-emerald-50"

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { NextRequest,  NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Modify the existing PUT function to handle editing
 export async function PUT(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
@@ -55,12 +54,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { itemId, name, quantity, price, imageUrl, lowStockThreshold } = await req.json()
+    const { _id, name, quantity, price, imageUrl, lowStockThreshold } = await req.json()
+
+    if (!_id) {
+      return NextResponse.json({ error: "Item ID is required" }, { status: 400 })
+    }
+
     const client = await clientPromise
     const db = client.db("inventory_management")
 
     const result = await db.collection("inventory").updateOne(
-      { _id: new ObjectId(itemId), userId },
+      { _id: new ObjectId(_id), userId },
       {
         $set: {
           name,
@@ -78,6 +82,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ message: "Item updated successfully" }, { status: 200 })
   } catch (error) {
+    console.error("Error updating item:", error)
     return NextResponse.json({ error: "An error occurred while updating the item" }, { status: 500 })
   }
 }

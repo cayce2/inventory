@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter } from "next/navigation"
 import axios from "axios"
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2, Mail, Lock, CheckCircle2 } from "lucide-react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -12,7 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import NavbarLayout from "@/components/NavbarLayout"
 import Link from "next/link"
 
-export default function Login() {
+// Create a separate component to handle the search params logic
+function LoginForm() {
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -27,11 +29,14 @@ export default function Login() {
   })
   
   const router = useRouter()
+  
+  // Import useSearchParams within the component that uses it
+  const { useSearchParams } = require("next/navigation")
   const searchParams = useSearchParams()
 
   useEffect(() => {
     // Check if user just registered
-    const registered = searchParams.get("registered")
+    const registered = searchParams?.get("registered")
     if (registered === "true") {
       setSuccessMessage("Account created successfully! You can now sign in.")
     }
@@ -104,6 +109,143 @@ export default function Login() {
   }
 
   return (
+    <>
+      {error && (
+        <Alert variant="destructive" className="mb-6 animate-in fade-in-50 duration-300">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
+      {successMessage && (
+        <Alert className="mb-6 bg-green-50 text-green-800 border-green-200 animate-in fade-in-50 duration-300">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label htmlFor="email" className="text-sm font-medium">
+              Email Address
+            </label>
+            {touched.email && getFieldError("email") && (
+              <span className="text-xs text-red-500">{getFieldError("email")}</span>
+            )}
+          </div>
+          <div className="relative">
+            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="your.email@example.com"
+              value={formData.email}
+              onChange={handleChange}
+              onBlur={() => handleBlur("email")}
+              className={`pl-10 transition-all ${
+                touched.email && getFieldError("email") 
+                  ? "border-red-500 ring-red-100" 
+                  : touched.email && !getFieldError("email") && formData.email.includes("@")
+                    ? "border-green-500 ring-green-100"
+                    : ""
+              }`}
+            />
+            {touched.email && !getFieldError("email") && formData.email.includes("@") && (
+              <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
+            {touched.password && getFieldError("password") && (
+              <span className="text-xs text-red-500">{getFieldError("password")}</span>
+            )}
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={formData.password}
+              onChange={handleChange}
+              onBlur={() => handleBlur("password")}
+              className={`pl-10 pr-10 transition-all ${
+                touched.password && getFieldError("password") 
+                  ? "border-red-500 ring-red-100" 
+                  : touched.password && !getFieldError("password") && formData.password.trim()
+                    ? "border-green-500 ring-green-100"
+                    : ""
+              }`}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {showPassword ? "Hide password" : "Show password"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="flex justify-end">
+            <Link 
+              href="/forgot-password" 
+              className="text-sm text-indigo-600 hover:text-indigo-500 font-medium transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </div>
+
+        <Button
+          type="submit"
+          className="w-full h-12 mt-6 transition-all duration-300 bg-indigo-600 hover:bg-indigo-700"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <div className="flex items-center justify-center">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <span>Signing in...</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center">
+              <LogIn className="mr-2 h-4 w-4" />
+              <span>Sign in</span>
+            </div>
+          )}
+        </Button>
+      </form>
+    </>
+  )
+}
+
+// Loading fallback component
+function LoginFormLoading() {
+  return (
+    <div className="flex justify-center items-center py-8">
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+    </div>
+  )
+}
+
+export default function Login() {
+  return (
     <NavbarLayout>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col justify-center items-center p-4">
         <div className="w-full max-w-md space-y-4">
@@ -114,127 +256,9 @@ export default function Login() {
           
           <Card className="border-0 shadow-lg">
             <CardContent className="pt-6">
-              {error && (
-                <Alert variant="destructive" className="mb-6 animate-in fade-in-50 duration-300">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              
-              {successMessage && (
-                <Alert className="mb-6 bg-green-50 text-green-800 border-green-200 animate-in fade-in-50 duration-300">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <AlertDescription>{successMessage}</AlertDescription>
-                </Alert>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="email" className="text-sm font-medium">
-                      Email Address
-                    </label>
-                    {touched.email && getFieldError("email") && (
-                      <span className="text-xs text-red-500">{getFieldError("email")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={formData.email}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("email")}
-                      className={`pl-10 transition-all ${
-                        touched.email && getFieldError("email") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.email && !getFieldError("email") && formData.email.includes("@")
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    {touched.email && !getFieldError("email") && formData.email.includes("@") && (
-                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="password" className="text-sm font-medium">
-                      Password
-                    </label>
-                    {touched.password && getFieldError("password") && (
-                      <span className="text-xs text-red-500">{getFieldError("password")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("password")}
-                      className={`pl-10 pr-10 transition-all ${
-                        touched.password && getFieldError("password") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.password && !getFieldError("password") && formData.password.trim()
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                          >
-                            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {showPassword ? "Hide password" : "Show password"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="flex justify-end">
-                    <Link 
-                      href="/forgot-password" 
-                      className="text-sm text-indigo-600 hover:text-indigo-500 font-medium transition-colors"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full h-12 mt-6 transition-all duration-300 bg-indigo-600 hover:bg-indigo-700"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Signing in...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center">
-                      <LogIn className="mr-2 h-4 w-4" />
-                      <span>Sign in</span>
-                    </div>
-                  )}
-                </Button>
-              </form>
+              <Suspense fallback={<LoginFormLoading />}>
+                <LoginForm />
+              </Suspense>
             </CardContent>
             
             <CardFooter className="flex justify-center pb-6 pt-2">

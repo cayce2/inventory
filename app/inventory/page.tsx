@@ -348,7 +348,7 @@ export default function Inventory() {
                             </div>
                             
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                              <span className="text-gray-700 font-semibold">${item.price.toFixed(2)}</span>
+                              <span className="text-gray-700 font-semibold">KES {item.price.toFixed(2)}</span>
                               <span className="text-sm text-gray-500">Threshold: {item.lowStockThreshold}</span>
                             </div>
                           </div>
@@ -471,7 +471,7 @@ export default function Inventory() {
                                   <span className="font-medium text-gray-900">{item.name}</span>
                                 </div>
                               </td>
-                              <td className="p-4 font-medium">${item.price.toFixed(2)}</td>
+                              <td className="p-4 font-medium">KES{item.price.toFixed(2)}</td>
                               <td className="p-4">
                                 <div className="flex items-center">
                                   <span className="font-medium mr-2">{item.quantity}</span>
@@ -576,7 +576,7 @@ export default function Inventory() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price ($)</Label>
+                  <Label htmlFor="price">Price (KES)</Label>
                   <Input
                     id="price"
                     type="number"
