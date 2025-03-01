@@ -30,10 +30,17 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12)
+
+    // Check if this is the first user
+    const userCount = await db.collection("users").countDocuments()
+    const role = userCount === 0 ? "admin" : "user"
+
     const result = await db.collection("users").insertOne({
       name,
       email,
       password: hashedPassword,
+      role,
+      suspended: false,
       createdAt: new Date(),
     })
 

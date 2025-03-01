@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import axios from "axios"
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2, Mail, Lock, CheckCircle2 } from "lucide-react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -22,6 +22,7 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
+  const [isSuspended, setIsSuspended] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [touched, setTouched] = useState({
     email: false,
@@ -30,8 +31,7 @@ function LoginForm() {
   
   const router = useRouter()
   
-  // Import useSearchParams within the component that uses it
-  const { useSearchParams } = require("next/navigation")
+  // Use the imported hook instead of requiring it
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -86,6 +86,7 @@ function LoginForm() {
     
     setError("")
     setSuccessMessage("")
+    setIsSuspended(false)
     setIsLoading(true)
 
     try {
@@ -98,7 +99,11 @@ function LoginForm() {
       }, 500)
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
-        setError(error.response.data.error || "Invalid email or password")
+        if (error.response.status === 403 && error.response.data.suspended) {
+          setIsSuspended(true)
+        } else {
+          setError(error.response.data.error || "An error occurred during login")
+        }
       } else {
         setError("An unexpected error occurred")
       }
@@ -106,7 +111,7 @@ function LoginForm() {
     } finally {
       setIsLoading(false)
     }
-  }
+  } // Added closing brace for handleSubmit function
 
   return (
     <>
@@ -125,6 +130,11 @@ function LoginForm() {
       )}
       
       <form onSubmit={handleSubmit} className="space-y-5">
+        {isSuspended && (
+          <div className="mb-4 text-red-500">
+            Your account has been suspended. Please make a payment or call 0111363697 to reactivate your account.
+          </div>
+        )}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label htmlFor="email" className="text-sm font-medium">
