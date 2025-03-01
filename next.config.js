@@ -10,6 +10,12 @@ const nextConfig = {
           port: '',
           pathname: '/**',
         },
+        {
+          protocol: 'https',
+          hostname: '0oflunqznwz0bbpp.public.blob.vercel-storage.com',
+          port: '',
+          pathname: '/**',
+        },
       ],
       // Add performance optimizations
       deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
