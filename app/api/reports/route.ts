@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
       })
       .toArray()
 
+    // Fetch restock history
+    const restockHistory = await db.collection("restockHistory").find({ userId }).toArray()
+
     // Create a worksheet for inventory
     const inventoryWs = XLSX.utils.json_to_sheet(
       inventory.map((item) => ({
@@ -83,18 +86,31 @@ export async function GET(req: NextRequest) {
       })),
     )
 
+    // Create a worksheet for restock history
+    const restockHistoryWs = XLSX.utils.json_to_sheet(
+      restockHistory.map((record) => ({
+        "Item Name": inventory.find((item) => item._id.toString() === record.itemId.toString())?.name || "Unknown",
+        "Restock Quantity": record.quantity,
+        "Restock Date": new Date(record.date).toLocaleDateString(),
+      })),
+    )
+
     // Create a workbook and add the worksheets
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, inventoryWs, "Inventory Report")
     XLSX.utils.book_append_sheet(wb, incomeWs, "Total Income")
     XLSX.utils.book_append_sheet(wb, unpaidInvoicesWs, "Unpaid Invoices")
+    XLSX.utils.book_append_sheet(wb, restockHistoryWs, "Restock History")
 
     // Generate buffer
     const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" })
 
     // Set the appropriate headers for file download
     const headers = new Headers()
-    headers.append("Content-Disposition", 'attachment; filename="inventory_income_and_unpaid_invoices_report.xlsx"')
+    headers.append(
+      "Content-Disposition",
+      'attachment; filename="inventory_income_unpaid_invoices_and_restock_report.xlsx"',
+    )
     headers.append("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     return new NextResponse(excelBuffer, {

@@ -1,11 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @next/next/no-img-element */
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Plus, Edit2, Trash2, Save, ShoppingBag, Search, ArrowUpDown, Loader } from "lucide-react"
 import NavbarLayout from "@/components/NavbarLayout"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-//import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 
@@ -52,6 +51,12 @@ export default function Inventory() {
   const [sortField, setSortField] = useState<"name" | "price" | "quantity">("name")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [filterStatus, setFilterStatus] = useState<"all" | "inStock" | "lowStock" | "outOfStock">("all")
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [restockQuantity, setRestockQuantity] = useState<number>(10)
+  const [restockDialogOpen, setRestockDialogOpen] = useState(false)
+  const [itemToRestock, setItemToRestock] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -119,15 +124,40 @@ export default function Inventory() {
     }
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      setPreviewImage(URL.createObjectURL(file))
+    }
+  }
+
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       setIsLoading(true)
       const token = localStorage.getItem("token")
-      await axios.post("/api/inventory", newItem, {
-        headers: { Authorization: `Bearer ${token}` },
+      const formData = new FormData()
+      formData.append("name", newItem.name)
+      formData.append("quantity", newItem.quantity.toString())
+      formData.append("price", newItem.price.toString())
+      formData.append("lowStockThreshold", newItem.lowStockThreshold.toString())
+      if (selectedImage) {
+        formData.append("image", selectedImage)
+      }
+
+      await axios.post("/api/inventory", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
       })
       setNewItem(defaultNewItem)
+      setSelectedImage(null)
+      setPreviewImage(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
       setItemDialogOpen(false)
       fetchInventory()
     } catch (error) {
@@ -144,10 +174,28 @@ export default function Inventory() {
     try {
       setIsLoading(true)
       const token = localStorage.getItem("token")
-      await axios.put("/api/inventory", editingItem, {
-        headers: { Authorization: `Bearer ${token}` },
+      const formData = new FormData()
+      formData.append("_id", editingItem._id)
+      formData.append("name", editingItem.name)
+      formData.append("quantity", editingItem.quantity.toString())
+      formData.append("price", editingItem.price.toString())
+      formData.append("lowStockThreshold", editingItem.lowStockThreshold.toString())
+      if (selectedImage) {
+        formData.append("image", selectedImage)
+      }
+
+      await axios.put("/api/inventory", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
       })
       setEditingItem(null)
+      setSelectedImage(null)
+      setPreviewImage(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
       setItemDialogOpen(false)
       fetchInventory()
     } catch (error) {
@@ -176,15 +224,49 @@ export default function Inventory() {
     }
   }
 
+  const handleRestock = async () => {
+    if (!itemToRestock) return
+    
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      await axios.post(
+        "/api/inventory/restock",
+        { itemId: itemToRestock, quantity: restockQuantity },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      setRestockDialogOpen(false)
+      setRestockQuantity(10)
+      fetchInventory()
+    } catch (error) {
+      console.error("Error restocking item:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const openEditDialog = (item: InventoryItem) => {
     setEditingItem(item)
+    setPreviewImage(item.imageUrl)
     setItemDialogOpen(true)
   }
 
   const openAddDialog = () => {
     setEditingItem(null)
     setNewItem(defaultNewItem)
+    setSelectedImage(null)
+    setPreviewImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
     setItemDialogOpen(true)
+  }
+
+  const openRestockDialog = (itemId: string) => {
+    setItemToRestock(itemId)
+    setRestockDialogOpen(true)
   }
 
   const confirmDelete = (itemId: string) => {
@@ -320,9 +402,11 @@ export default function Inventory() {
                     return (
                       <Card key={item._id} className="overflow-hidden border border-gray-200 transition-all hover:shadow-md group">
                         <div className="relative h-48 overflow-hidden bg-gray-100">
-                          <img
+                          <Image
                             src={item.imageUrl || "/placeholder.svg"}
                             alt={item.name}
+                            width={400}
+                            height={300}
                             className="w-full h-full object-cover transition-transform group-hover:scale-105"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
@@ -348,28 +432,40 @@ export default function Inventory() {
                             </div>
                             
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                              <span className="text-gray-700 font-semibold">KES {item.price.toFixed(2)}</span>
+                              <span className="text-gray-700 font-semibold">${item.price.toFixed(2)}</span>
                               <span className="text-sm text-gray-500">Threshold: {item.lowStockThreshold}</span>
                             </div>
                           </div>
                         </CardContent>
-                        <CardFooter className="flex justify-between bg-gray-50 p-4 border-t">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                            onClick={() => openEditDialog(item)}
-                          >
-                            <Edit2 className="h-4 w-4 mr-1" /> Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" 
-                            onClick={() => confirmDelete(item._id)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" /> Delete
-                          </Button>
+                        <CardFooter className="flex flex-col gap-2 bg-gray-50 p-4 border-t">
+                          <div className="w-full">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="w-full border-green-300 text-green-700 hover:bg-green-50"
+                              onClick={() => openRestockDialog(item._id)}
+                            >
+                              <Plus className="h-4 w-4 mr-1" /> Restock
+                            </Button>
+                          </div>
+                          <div className="flex justify-between w-full">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                              onClick={() => openEditDialog(item)}
+                            >
+                              <Edit2 className="h-4 w-4 mr-1" /> Edit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" 
+                              onClick={() => confirmDelete(item._id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" /> Delete
+                            </Button>
+                          </div>
                         </CardFooter>
                       </Card>
                     );
@@ -458,9 +554,11 @@ export default function Inventory() {
                               <td className="p-4">
                                 <div className="flex items-center">
                                   <div className="h-10 w-10 rounded-md bg-gray-100 mr-3 overflow-hidden border border-gray-200">
-                                    <img 
+                                    <Image 
                                       src={item.imageUrl || "/placeholder.svg"}
                                       alt={item.name}
+                                      width={40}
+                                      height={40}
                                       className="h-full w-full object-cover"
                                       onError={(e) => {
                                         const target = e.target as HTMLImageElement;
@@ -471,7 +569,7 @@ export default function Inventory() {
                                   <span className="font-medium text-gray-900">{item.name}</span>
                                 </div>
                               </td>
-                              <td className="p-4 font-medium">KES{item.price.toFixed(2)}</td>
+                              <td className="p-4 font-medium">${item.price.toFixed(2)}</td>
                               <td className="p-4">
                                 <div className="flex items-center">
                                   <span className="font-medium mr-2">{item.quantity}</span>
@@ -488,6 +586,14 @@ export default function Inventory() {
                               </td>
                               <td className="p-4 text-right">
                                 <div className="flex gap-2 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-green-300 text-green-700 hover:bg-green-50"
+                                    onClick={() => openRestockDialog(item._id)}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -576,7 +682,7 @@ export default function Inventory() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (KES)</Label>
+                  <Label htmlFor="price">Price ($)</Label>
                   <Input
                     id="price"
                     type="number"
@@ -600,131 +706,164 @@ export default function Inventory() {
                     value={editingItem ? editingItem.quantity : newItem.quantity}
                     onChange={(e) =>
                       editingItem
-                        ? setEditingItem({ ...editingItem, quantity: Number.parseInt(e.target.value) })
-                        : setNewItem({ ...newItem, quantity: Number.parseInt(e.target.value) })
-                    }
-                    required
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="imageUrl">Product Image URL</Label>
-                <Input
-                  id="imageUrl"
-                  value={editingItem ? editingItem.imageUrl : newItem.imageUrl}
-                  onChange={(e) =>
-                    editingItem
-                      ? setEditingItem({ ...editingItem, imageUrl: e.target.value })
-                      : setNewItem({ ...newItem, imageUrl: e.target.value })
-                  }
-                  placeholder="https://example.com/image.jpg"
-                />
-                {(editingItem?.imageUrl || newItem.imageUrl) && (
-                  <div className="mt-2 h-16 w-16 rounded border overflow-hidden">
-                    <img 
-                      src={(editingItem ? editingItem.imageUrl : newItem.imageUrl) || "/placeholder.svg"} 
-                      alt="Preview"
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = "/placeholder.svg";
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="lowStockThreshold">Low Stock Threshold</Label>
-                  <span className="text-sm text-gray-500">
-                    Alert when stock falls below this level
-                  </span>
-                </div>
-                <Input
-                  id="lowStockThreshold"
-                  type="number"
-                  value={editingItem ? editingItem.lowStockThreshold : newItem.lowStockThreshold}
-                  onChange={(e) =>
-                    editingItem
-                      ? setEditingItem({ ...editingItem, lowStockThreshold: Number.parseInt(e.target.value) })
-                      : setNewItem({ ...newItem, lowStockThreshold: Number.parseInt(e.target.value) })
+                      ? setEditingItem({ ...editingItem, quantity: Number.parseInt(e.target.value) })
+                      : setNewItem({ ...newItem, quantity: Number.parseInt(e.target.value) })
                   }
                   required
+                  placeholder="0"
                 />
               </div>
             </div>
             
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setItemDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={isLoading}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                {isLoading ? (
-                  <div className="flex items-center">
-                    <Loader className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
+            <div className="space-y-2">
+              <Label htmlFor="lowStockThreshold">Low Stock Threshold</Label>
+              <Input
+                id="lowStockThreshold"
+                type="number"
+                value={editingItem ? editingItem.lowStockThreshold : newItem.lowStockThreshold}
+                onChange={(e) =>
+                  editingItem
+                    ? setEditingItem({ ...editingItem, lowStockThreshold: Number.parseInt(e.target.value) })
+                    : setNewItem({ ...newItem, lowStockThreshold: Number.parseInt(e.target.value) })
+                }
+                required
+                placeholder="10"
+              />
+              <p className="text-sm text-gray-500">You&apos;ll be alerted when stock falls below this level</p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="image">Product Image</Label>
+              <div className="flex items-center gap-4">
+                {previewImage && (
+                  <div className="relative w-20 h-20 border rounded-md overflow-hidden">
+                    <Image
+                      src={previewImage}
+                      alt="Preview"
+                      fill
+                      className="object-cover"
+                    />
                   </div>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    {editingItem ? "Update Item" : "Add Item"}
-                  </>
                 )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Delete Inventory Item</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the item from your inventory.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="border-gray-300">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteItem}
-              className="bg-red-600 hover:bg-red-700 text-white"
+                <div className="flex-1">
+                  <Input
+                    id="image"
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setItemDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
               disabled={isLoading}
+              className="bg-indigo-600 hover:bg-indigo-700"
             >
               {isLoading ? (
-                <div className="flex items-center">
+                <>
                   <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </div>
+                  Saving...
+                </>
               ) : (
                 <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Item
+                  <Save className="mr-2 h-4 w-4" />
+                  {editingItem ? "Save Changes" : "Add Item"}
                 </>
               )}
-              {isLoading ? (
-                <div className="flex items-center">
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </div>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Item
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </NavbarLayout>
-  );
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the selected item from your inventory.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteItem}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            {isLoading ? (
+              <>
+                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              "Delete Item"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Restock Dialog */}
+    <Dialog open={restockDialogOpen} onOpenChange={setRestockDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Restock Inventory</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Label htmlFor="restockQuantity">Add Quantity</Label>
+          <Input
+            id="restockQuantity"
+            type="number"
+            value={restockQuantity}
+            onChange={(e) => setRestockQuantity(Number.parseInt(e.target.value))}
+            min="1"
+            required
+          />
+          <p className="text-sm text-gray-500">
+            Enter the number of units to add to the current inventory
+          </p>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setRestockDialogOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRestock}
+            disabled={isLoading}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isLoading ? (
+              <>
+                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Confirm Restock
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </NavbarLayout>
+);
 }
