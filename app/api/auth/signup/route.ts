@@ -4,16 +4,22 @@ import clientPromise from "@/lib/mongodb"
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json()
+    const { name, email, phone, password } = await req.json()
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
+    if (!name || !email || !phone || !password) {
+      return NextResponse.json({ error: "Name, email, phone, and password are required" }, { status: 400 })
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
+    }
+
+    // Validate phone number format (simple check for now)
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/
+    if (!phoneRegex.test(phone)) {
+      return NextResponse.json({ error: "Invalid phone number format" }, { status: 400 })
     }
 
     // Validate password strength
@@ -38,6 +44,7 @@ export async function POST(req: Request) {
     const result = await db.collection("users").insertOne({
       name,
       email,
+      phone,
       password: hashedPassword,
       role,
       suspended: false,

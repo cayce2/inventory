@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import axios from "axios"
-import { Eye, EyeOff, Loader2, User, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, User, Mail, Lock, ArrowRight, CheckCircle2, Phone } from "lucide-react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import Link from "next/link"
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: "",
+    phone:"",
     email: "",
     password: "",
   })
@@ -23,6 +24,7 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false)
   const [touched, setTouched] = useState({
     name: false,
+    phone: false,
     email: false,
     password: false,
   })
@@ -55,6 +57,8 @@ export default function Signup() {
     switch (field) {
       case "name":
         return !formData.name.trim() ? "Name is required" : null
+        case "phone":
+          return !formData.phone.trim() ? "Phone is required" : null
       case "email":
         return !formData.email.trim() 
           ? "Email is required" 
@@ -72,6 +76,7 @@ export default function Signup() {
 
   const validateForm = () => {
     if (!formData.name.trim()) return "Name is required"
+    if (!formData.phone.trim()) return "Phone is required"
     if (!formData.email.trim()) return "Email is required"
     if (!formData.email.includes("@")) return "Please enter a valid email"
     if (formData.password.length < 6) return "Password must be at least 6 characters"
@@ -84,6 +89,7 @@ export default function Signup() {
     // Touch all fields to show validation errors
     setTouched({
       name: true,
+      phone: true,
       email: true,
       password: true,
     })
@@ -157,6 +163,38 @@ export default function Signup() {
                       }`}
                     />
                     {touched.name && !getFieldError("name") && formData.name.trim() && (
+                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="name" className="text-sm font-medium">
+                      Phone Number
+                    </label>
+                    {touched.phone && getFieldError("name") && (
+                      <span className="text-xs text-red-500">{getFieldError("phone")}</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="phone"
+                      name="phone"
+                      placeholder="Enter your phone number"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      onBlur={() => handleBlur("phone")}
+                      className={`pl-10 transition-all ${
+                        touched.phone && getFieldError("phone") 
+                          ? "border-red-500 ring-red-100" 
+                          : touched.phone && !getFieldError("phone")
+                            ? "border-green-500 ring-green-100"
+                            : ""
+                      }`}
+                    />
+                    {touched.name && !getFieldError("phone") && formData.phone.trim() && (
                       <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                     )}
                   </div>
