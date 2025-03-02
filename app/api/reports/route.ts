@@ -82,7 +82,9 @@ export async function GET(req: NextRequest) {
         "Invoice Number": invoice.invoiceNumber,
         Amount: invoice.amount,
         "Due Date": new Date(invoice.dueDate).toLocaleDateString(),
-        Items: invoice.items.map((item: { name: any; quantity: any }) => `${item.name} (${item.quantity})`).join(", "),
+        Items: Array.isArray(invoice.items) 
+          ? invoice.items.map((item) => `${item.name} (${item.quantity})`).join(", ")
+          : "No items",
       })),
     )
 
