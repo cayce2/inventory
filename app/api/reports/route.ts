@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import * as XLSX from "xlsx"
+import { ObjectId } from "mongodb"
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const client = await clientPromise
     const db = client.db("inventory_management")
 
+    // Fetch all inventory items
     const inventory = await db.collection("inventory").find({ userId }).toArray()
 
     // Calculate total income for different time periods
@@ -43,17 +44,51 @@ export async function GET(req: NextRequest) {
       allTime: invoices.reduce((sum, invoice) => sum + invoice.amount, 0),
     }
 
-    // Fetch unpaid invoices
+    // Fetch unpaid invoices with item details
     const unpaidInvoices = await db
       .collection("invoices")
-      .find({
-        userId,
-        status: "unpaid",
-      })
+      .aggregate([
+        {
+          $match: {
+            userId: new ObjectId(userId),
+            status: "unpaid",
+          },
+        },
+        {
+          $lookup: {
+            from: "inventory",
+            localField: "items.itemId",
+            foreignField: "_id",
+            as: "itemDetails",
+          },
+        },
+      ])
       .toArray()
 
-    // Fetch restock history
-    const restockHistory = await db.collection("restockHistory").find({ userId }).toArray()
+    // Fetch restock history with item details
+    const restockHistory = await db
+      .collection("restockHistory")
+      .aggregate([
+        {
+          $match: {
+            userId: new ObjectId(userId),
+          },
+        },
+        {
+          $lookup: {
+            from: "inventory",
+            localField: "itemId",
+            foreignField: "_id",
+            as: "itemDetails",
+          },
+        },
+        {
+          $addFields: {
+            itemName: { $arrayElemAt: ["$itemDetails.name", 0] },
+          },
+        },
+      ])
+      .toArray()
 
     // Create a worksheet for inventory
     const inventoryWs = XLSX.utils.json_to_sheet(
@@ -82,18 +117,26 @@ export async function GET(req: NextRequest) {
         "Invoice Number": invoice.invoiceNumber,
         Amount: invoice.amount,
         "Due Date": new Date(invoice.dueDate).toLocaleDateString(),
-        Items: Array.isArray(invoice.items) 
-          ? invoice.items.map((item) => `${item.name} (${item.quantity})`).join(", ")
-          : "No items",
+        Items: invoice.items
+          .map((item: { itemId: ObjectId; quantity: number }) => {
+            const itemDetail = invoice.itemDetails.find(
+              (detail: { _id: ObjectId; name: string }) => detail._id.toString() === item.itemId.toString(),
+            )
+            return `${itemDetail ? itemDetail.name : "Unknown"} (${item.quantity})`
+          })
+          .join(", "),
       })),
     )
 
     // Create a worksheet for restock history
     const restockHistoryWs = XLSX.utils.json_to_sheet(
       restockHistory.map((record) => ({
-        "Item Name": inventory.find((item) => item._id.toString() === record.itemId.toString())?.name || "Unknown",
+        "Item Name": record.itemName || "Unknown",
         "Restock Quantity": record.quantity,
         "Restock Date": new Date(record.date).toLocaleDateString(),
+        "Previous Quantity": record.previousQuantity !== undefined ? record.previousQuantity : "N/A",
+        "New Quantity":
+          record.previousQuantity !== undefined ? record.previousQuantity + record.quantity : record.quantity,
       })),
     )
 
@@ -109,10 +152,7 @@ export async function GET(req: NextRequest) {
 
     // Set the appropriate headers for file download
     const headers = new Headers()
-    headers.append(
-      "Content-Disposition",
-      'attachment; filename="inventory_income_unpaid_invoices_and_restock_report.xlsx"',
-    )
+    headers.append("Content-Disposition", 'attachment; filename="inventory_report.xlsx"')
     headers.append("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     return new NextResponse(excelBuffer, {
@@ -162,7 +202,7 @@ export async function POST(req: NextRequest) {
       .aggregate([
         {
           $match: {
-            userId,
+            userId: new ObjectId(userId),
             status: "paid",
             createdAt: { $gte: startDate },
           },
@@ -178,16 +218,39 @@ export async function POST(req: NextRequest) {
 
     const unpaidInvoices = await db
       .collection("invoices")
-      .find({
-        userId,
-        status: "unpaid",
-      })
+      .aggregate([
+        {
+          $match: {
+            userId: new ObjectId(userId),
+            status: "unpaid",
+          },
+        },
+        {
+          $lookup: {
+            from: "inventory",
+            localField: "items.itemId",
+            foreignField: "_id",
+            as: "itemDetails",
+          },
+        },
+      ])
       .toArray()
 
     return NextResponse.json(
       {
         totalIncome: totalIncome[0]?.total || 0,
-        unpaidInvoices,
+        unpaidInvoices: unpaidInvoices.map((invoice) => ({
+          ...invoice,
+          items: invoice.items.map((item: { itemId: ObjectId; quantity: number }) => {
+            const itemDetail = invoice.itemDetails.find(
+              (detail: { _id: ObjectId; name: string }) => detail._id.toString() === item.itemId.toString(),
+            )
+            return {
+              ...item,
+              name: itemDetail ? itemDetail.name : "Unknown",
+            }
+          }),
+        })),
       },
       { status: 200 },
     )
