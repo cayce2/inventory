@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 
 interface InventoryItem {
+  image: any
   _id: string
   name: string
   quantity: number
@@ -403,7 +404,11 @@ export default function Inventory() {
                       <Card key={item._id} className="overflow-hidden border border-gray-200 transition-all hover:shadow-md group">
                         <div className="relative h-48 overflow-hidden bg-gray-100">
                           <Image
-                            src={item.imageUrl || "/placeholder.svg"}
+                            src={
+                              item.image
+                                ? `data:image/jpeg;base64,${item.image}`
+                                : item.imageUrl || "/placeholder.svg"
+                            }
                             alt={item.name}
                             width={400}
                             height={300}

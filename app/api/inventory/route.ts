@@ -3,7 +3,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
-import { put } from "@vercel/blob"
 import sharp from "sharp"
 
 export async function GET(req: NextRequest) {
@@ -42,17 +41,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Image is required" }, { status: 400 })
     }
 
-    // Compress the image
+    // Compress and resize the image
     const compressedImageBuffer = await sharp(await imageFile.arrayBuffer())
       .resize(800, 800, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer()
 
-    // Upload the compressed image to Vercel Blob
-    const blob = await put(`inventory/${imageFile.name}`, compressedImageBuffer, {
-      access: "public",
-      contentType: "image/jpeg",
-    })
+    // Convert the image to base64
+    const base64Image = compressedImageBuffer.toString("base64")
 
     const client = await clientPromise
     const db = client.db("inventory_management")
@@ -62,8 +58,8 @@ export async function POST(req: NextRequest) {
       name,
       quantity,
       price,
-      imageUrl: blob.url,
       lowStockThreshold,
+      image: base64Image,
     })
 
     return NextResponse.json({ message: "Item added successfully", itemId: result.insertedId }, { status: 201 })
@@ -103,19 +99,16 @@ export async function PUT(req: NextRequest) {
     }
 
     if (imageFile) {
-      // Compress the image
+      // Compress and resize the image
       const compressedImageBuffer = await sharp(await imageFile.arrayBuffer())
         .resize(800, 800, { fit: "inside", withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toBuffer()
 
-      // Upload the compressed image to Vercel Blob
-      const blob = await put(`inventory/${imageFile.name}`, compressedImageBuffer, {
-        access: "public",
-        contentType: "image/jpeg",
-      })
+      // Convert the image to base64
+      const base64Image = compressedImageBuffer.toString("base64")
 
-      updateData.imageUrl = blob.url
+      updateData.image = base64Image
     }
 
     const result = await db.collection("inventory").updateOne({ _id: new ObjectId(_id), userId }, { $set: updateData })
