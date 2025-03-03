@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import {NextRequest, NextResponse } from "next/server"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
@@ -14,7 +15,10 @@ export async function GET(req: NextRequest) {
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    const invoices = await db.collection("invoices").find({ userId }).toArray()
+    const invoices = await db
+      .collection("invoices")
+      .find({ userId, deleted: { $ne: true } })
+      .toArray()
     return NextResponse.json(invoices, { status: 200 })
   } catch (error) {
     return NextResponse.json({ error: "An error occurred while fetching invoices" }, { status: 500 })
@@ -49,6 +53,7 @@ export async function POST(req: NextRequest) {
             items,
             status: "unpaid",
             createdAt: new Date(),
+            deleted: false,
           },
           { session },
         )
@@ -70,6 +75,56 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error adding invoice:", error)
     return NextResponse.json({ error: "An error occurred while adding the invoice" }, { status: 500 })
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const userId = await authMiddleware(req)
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { invoiceId, action } = await req.json()
+
+    if (!invoiceId || !action) {
+      return NextResponse.json({ error: "Invoice ID and action are required" }, { status: 400 })
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    let updateData: any = {}
+
+    switch (action) {
+      case "markPaid":
+        updateData = { status: "paid" }
+        break
+      case "markUnpaid":
+        updateData = { status: "unpaid" }
+        break
+      case "delete":
+        updateData = { deleted: true }
+        break
+      case "restore":
+        updateData = { deleted: false }
+        break
+      default:
+        return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    }
+
+    const result = await db
+      .collection("invoices")
+      .updateOne({ _id: new ObjectId(invoiceId), userId }, { $set: updateData })
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ message: "Invoice updated successfully" }, { status: 200 })
+  } catch (error) {
+    console.error("Error updating invoice:", error)
+    return NextResponse.json({ error: "An error occurred while updating the invoice" }, { status: 500 })
   }
 }
 

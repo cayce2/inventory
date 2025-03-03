@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import type React from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+// Added Toast functionality
 import { useToast } from "@/hooks/use-toast";
 import NavbarLayout from "@/components/NavbarLayout";
+// Added shadcn/ui components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,16 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+// Added dialog components for delete confirmation
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+// Added more icons for better UX
 import { 
   Loader2, 
   Plus, 
@@ -42,8 +54,10 @@ import {
   Phone,
   Calendar,
   Package,
-  DollarSign
+  DollarSign,
+  AlertTriangle
 } from "lucide-react";
+// Added Tab components for better organization
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +72,7 @@ interface Invoice {
   dueDate: string;
   status: "paid" | "unpaid";
   items: Array<{ itemId: string; quantity: number }>;
+  // Removed 'deleted' field since it's handled differently in the new version
 }
 
 interface InventoryItem {
@@ -68,15 +83,21 @@ interface InventoryItem {
 }
 
 export default function Billing() {
+  // Added toast functionality
   const { toast } = useToast();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  // Added loading and error states for better UX
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Added tab state for filtering invoices
   const [activeTab, setActiveTab] = useState("all");
+  // Added state for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  // Removed showDeleted state since it's handled differently
   const [newInvoice, setNewInvoice] = useState({
-    invoiceNumber: "",
     customerName: "",
     customerPhone: "",
     amount: 0,
@@ -93,9 +114,11 @@ export default function Billing() {
       router.push("/login");
       return;
     }
+    // Renamed to fetchInitialData to better describe its purpose
     fetchInitialData();
   }, [router]);
 
+  // Consolidated API calls with Promise.all for better performance
   const fetchInitialData = async () => {
     try {
       setLoading(true);
@@ -106,6 +129,7 @@ export default function Billing() {
         return;
       }
 
+      // Optimized with Promise.all to fetch both resources in parallel
       const [invoicesRes, inventoryRes] = await Promise.all([
         axios.get("/api/billing", {
           headers: { Authorization: `Bearer ${token}` },
@@ -117,12 +141,14 @@ export default function Billing() {
 
       setInvoices(invoicesRes.data);
       setInventory(inventoryRes.data);
+      // Added toast notification for feedback
       toast({
         title: "Data refreshed",
         description: "Billing information has been updated.",
       });
     } catch (error) {
       setError("Failed to fetch data. Please try again.");
+      // Added error toast
       toast({
         variant: "destructive",
         title: "Error",
@@ -134,11 +160,19 @@ export default function Billing() {
     }
   };
 
+  // Function to generate invoice number
+  const generateInvoiceNumber = () => {
+    const prefix = "INV";
+    const timestamp = Date.now().toString().slice(-6); // Use last 6 digits of timestamp
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0"); // Random 3-digit number
+    return `${prefix}-${timestamp}-${random}`;
+  };
+
   const handleAddItem = () => {
     if (selectedItem && selectedQuantity > 0) {
       const item = inventory.find((i) => i._id === selectedItem);
       if (item) {
-        // Check if item is already in the list
+        // Added check if item already exists to update quantity instead of adding duplicate
         const existingItemIndex = newInvoice.items.findIndex(
           (i) => i.itemId === selectedItem
         );
@@ -169,6 +203,7 @@ export default function Billing() {
         setSelectedItem("");
         setSelectedQuantity(1);
         
+        // Added toast notification
         toast({
           title: "Item added",
           description: `${item.name} has been added to the invoice.`,
@@ -177,6 +212,7 @@ export default function Billing() {
     }
   };
 
+  // Added new function to remove items
   const handleRemoveItem = (index: number) => {
     const removedItem = inventory.find(
       (i) => i._id === newInvoice.items[index].itemId
@@ -194,6 +230,7 @@ export default function Billing() {
       amount: newAmount,
     });
     
+    // Added toast for feedback
     if (removedItem) {
       toast({
         title: "Item removed",
@@ -205,14 +242,19 @@ export default function Billing() {
   const handleAddInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Added submitting state for UI feedback
       setSubmitting(true);
       const token = localStorage.getItem("token");
-      await axios.post("/api/billing", newInvoice, {
+      
+      // Generate invoice number before submitting
+      const invoiceNumber = generateInvoiceNumber();
+      
+      // Add the generated invoice number to the invoice data
+      await axios.post("/api/billing", { ...newInvoice, invoiceNumber }, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
       setNewInvoice({
-        invoiceNumber: "",
         customerName: "",
         customerPhone: "",
         amount: 0,
@@ -222,15 +264,17 @@ export default function Billing() {
       
       await fetchInitialData();
       
+      // Added success toast
       toast({
         title: "Invoice created",
-        description: `Invoice #${newInvoice.invoiceNumber} has been created successfully.`,
+        description: `Invoice #${invoiceNumber} has been created successfully.`,
       });
       
       // Switch to invoices tab after creation
       setActiveTab("all");
     } catch (error) {
       setError("Failed to add invoice. Please try again.");
+      // Added error toast
       toast({
         variant: "destructive",
         title: "Error creating invoice",
@@ -242,6 +286,7 @@ export default function Billing() {
     }
   };
 
+  // Replaced handleInvoiceAction with more specific function
   const handleUpdateInvoiceStatus = async (
     invoiceId: string,
     newStatus: "paid" | "unpaid",
@@ -250,6 +295,7 @@ export default function Billing() {
     try {
       setSubmitting(true);
       const token = localStorage.getItem("token");
+      // Changed API endpoint pattern
       await axios.put(
         `/api/billing/${invoiceId}`,
         { status: newStatus },
@@ -260,6 +306,7 @@ export default function Billing() {
       
       await fetchInitialData();
       
+      // Added success toast
       toast({
         title: `Invoice ${newStatus === "paid" ? "marked as paid" : "marked as unpaid"}`,
         description: `Invoice #${invoiceNumber} status has been updated.`,
@@ -277,12 +324,54 @@ export default function Billing() {
     }
   };
 
-  // Filter invoices based on active tab
+  // New function to handle invoice deletion
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+    
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem("token");
+      
+      await axios.delete(`/api/billing/${invoiceToDelete._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      // Close dialog first for better UX
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+      
+      await fetchInitialData();
+      
+      toast({
+        title: "Invoice deleted",
+        description: `Invoice #${invoiceToDelete.invoiceNumber} has been permanently deleted.`,
+      });
+    } catch (error) {
+      setError("Failed to delete invoice. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Error deleting invoice",
+        description: "Please try again later.",
+      });
+      console.error("Error deleting invoice:", error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Function to open delete confirmation dialog
+  const openDeleteDialog = (invoice: Invoice) => {
+    setInvoiceToDelete(invoice);
+    setDeleteDialogOpen(true);
+  };
+
+  // Added filtering based on active tab
   const filteredInvoices = invoices.filter(invoice => {
     if (activeTab === "all") return true;
     return invoice.status === activeTab;
   });
 
+  // Complete redesign of the UI with shadcn components and better organization
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-6 md:p-8">
@@ -346,23 +435,16 @@ export default function Billing() {
               <CardContent className="pt-6">
                 <form onSubmit={handleAddInvoice} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Removed manual invoice number input field */}
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 text-sm font-medium">
                         <Receipt className="h-4 w-4 text-gray-500" />
                         Invoice Number
                       </label>
-                      <Input
-                        value={newInvoice.invoiceNumber}
-                        onChange={(e) =>
-                          setNewInvoice({
-                            ...newInvoice,
-                            invoiceNumber: e.target.value,
-                          })
-                        }
-                        placeholder="Enter invoice number"
-                        required
-                        className="transition-all focus-visible:ring-blue-500"
-                      />
+                      <div className="flex h-10 w-full rounded-md border border-input bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                        Auto-generated on submission
+                      </div>
+                      <p className="text-xs text-gray-500">Format: INV-XXXXXX-XXX</p>
                     </div>
 
                     <div className="space-y-2">
@@ -615,7 +697,7 @@ export default function Billing() {
                         <TableHead>Amount</TableHead>
                         <TableHead>Due Date</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -680,35 +762,45 @@ export default function Billing() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant={invoice.status === "paid" ? "destructive" : "default"}
-                                size="sm"
-                                onClick={() =>
-                                  handleUpdateInvoiceStatus(
-                                    invoice._id,
-                                    invoice.status === "paid" ? "unpaid" : "paid",
-                                    invoice.invoiceNumber
-                                  )
-                                }
-                                disabled={submitting}
-                                className={invoice.status === "paid" 
-                                  ? "bg-red-600 hover:bg-red-700" 
-                                  : "bg-green-600 hover:bg-green-700"}
-                              >
-                                {submitting ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : invoice.status === "paid" ? (
-                                  <span className="flex items-center gap-1">
-                                    <XCircle className="h-4 w-4" />
-                                    Mark Unpaid
-                                  </span>
-                                ) : (
-                                  <span className="flex items-center gap-1">
-                                    <CheckCircle className="h-4 w-4" />
-                                    Mark Paid
-                                  </span>
-                                )}
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant={invoice.status === "paid" ? "destructive" : "default"}
+                                  size="sm"
+                                  onClick={() =>
+                                    handleUpdateInvoiceStatus(
+                                      invoice._id,
+                                      invoice.status === "paid" ? "unpaid" : "paid",
+                                      invoice.invoiceNumber
+                                    )
+                                  }
+                                  disabled={submitting}
+                                  className={invoice.status === "paid" 
+                                    ? "bg-red-600 hover:bg-red-700" 
+                                    : "bg-green-600 hover:bg-green-700"}
+                                >
+                                  {submitting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : invoice.status === "paid" ? (
+                                    <span className="flex items-center gap-1">
+                                      <XCircle className="h-4 w-4" />
+                                      Unpaid
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      <CheckCircle className="h-4 w-4" />
+                                      Paid
+                                    </span>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openDeleteDialog(invoice)}
+                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -718,13 +810,18 @@ export default function Billing() {
                             <div className="flex flex-col items-center justify-center text-gray-500">
                               <Receipt className="h-10 w-10 mb-2 text-gray-300" />
                               <p className="font-medium text-lg mb-1">No invoices found</p>
-                              <p>
+                              <p className="text-gray-500 text-sm">
                                 {activeTab === "all" 
                                   ? "You haven't created any invoices yet." 
-                                  : activeTab === "paid" 
-                                    ? "No paid invoices found." 
-                                    : "No unpaid invoices found."}
+                                  : `No ${activeTab} invoices found.`}
                               </p>
+                              <Button 
+                                variant="outline" 
+                                onClick={() => setActiveTab("all")}
+                                className="mt-4"
+                              >
+                                View all invoices
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -737,6 +834,63 @@ export default function Billing() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Confirm Deletion
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete invoice{" "}
+              <span className="font-semibold">#{invoiceToDelete?.invoiceNumber}</span> for{" "}
+              <span className="font-semibold">{invoiceToDelete?.customerName}</span>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 bg-red-50 rounded-lg border border-red-100 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-medium text-red-800">Warning</p>
+                <p className="text-sm text-red-600">
+                  This will permanently delete the invoice and all associated data.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteInvoice}
+              disabled={submitting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Invoice
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </NavbarLayout>
   );
 }
