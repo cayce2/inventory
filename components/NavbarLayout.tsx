@@ -36,11 +36,32 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem("token")
-    setIsLoggedIn(false)
-    setIsAdmin(false)
-    router.push("/")
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/")
+        return
+      }
+
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        localStorage.removeItem("token")
+        setIsLoggedIn(false)
+        setIsAdmin(false)
+        router.push("/")
+      } else {
+        console.error("Logout failed")
+      }
+    } catch (error) {
+      console.error("Error during logout:", error)
+    }
   }
 
   const toggleDropdown = () => {
