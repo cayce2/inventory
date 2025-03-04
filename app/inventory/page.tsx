@@ -437,7 +437,7 @@ export default function Inventory() {
                             </div>
                             
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                              <span className="text-gray-700 font-semibold">${item.price.toFixed(2)}</span>
+                              <span className="text-gray-700 font-semibold">KES {item.price.toFixed(2)}</span>
                               <span className="text-sm text-gray-500">Threshold: {item.lowStockThreshold}</span>
                             </div>
                           </div>

@@ -525,7 +525,7 @@ export default function Billing() {
                             <SelectItem key={item._id} value={item._id}>
                               <span className="font-medium">{item.name}</span>
                               <span className="ml-2 text-gray-500">
-                                ${item.price.toFixed(2)} | Stock: {item.quantity}
+                                KES {item.price.toFixed(2)} | Stock: {item.quantity}
                               </span>
                             </SelectItem>
                           ))}
@@ -578,12 +578,12 @@ export default function Billing() {
                                   {inventoryItem?.name}
                                 </p>
                                 <p className="text-sm text-gray-500">
-                                  Quantity: {item.quantity} × ${inventoryItem?.price.toFixed(2)}
+                                  Quantity: {item.quantity} × KES {inventoryItem?.price.toFixed(2)}
                                 </p>
                               </div>
                               <div className="flex items-center gap-4">
                                 <p className="font-medium text-blue-600">
-                                  $
+                                  KES 
                                   {inventoryItem
                                     ? (inventoryItem.price * item.quantity).toFixed(2)
                                     : "0.00"}
@@ -617,7 +617,7 @@ export default function Billing() {
                       <span className="font-medium">Total Amount</span>
                     </div>
                     <div className="text-xl font-bold text-blue-700">
-                      ${newInvoice.amount.toFixed(2)}
+                      KES {newInvoice.amount.toFixed(2)}
                     </div>
                   </div>
 
