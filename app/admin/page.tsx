@@ -165,13 +165,13 @@ export default function AdminDashboard() {
   }
 
   const filteredUsers = users
-    .filter((user) => 
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort(sortUsers)
-
+  .filter((user) => 
+    (user.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+    (user.email?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+    (user.role?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+  )
+  .sort(sortUsers)
+  
   if (isLoading) {
     return (
       <NavbarLayout>
