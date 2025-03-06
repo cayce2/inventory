@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
-import { useState, useEffect } from "react";
-import type React from "react";
+import { useState, useEffect, useRef } from "react"; // Added useRef import
+import React from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 // Added Toast functionality
@@ -22,6 +23,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -55,13 +57,28 @@ import {
   Calendar,
   Package,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  Printer // Added Printer icon for the print function
 } from "lucide-react";
 // Added Tab components for better organization
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+
+interface PrintProps {
+  children?: React.ReactNode; // Add children as an optional prop
+}
+
+// Create a forwardRef Print component
+const Print = React.forwardRef<HTMLDivElement, PrintProps>(
+  ({ children }, ref) => {
+    return <div ref={ref}>{children}</div>; // Render the children
+  }
+);
+
+// Add display name to avoid warnings
+Print.displayName = 'Print';
 
 interface Invoice {
   _id: string;
@@ -106,6 +123,10 @@ export default function Billing() {
   });
   const [selectedItem, setSelectedItem] = useState("");
   const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
+  // First, add a new state to track the print modal
+  const [printModalOpen, setPrintModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -321,6 +342,70 @@ export default function Billing() {
       console.error("Error updating invoice status:", error);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Replace the handlePrint function with this version
+  const handlePrint = (invoice: Invoice) => {
+    // Set the invoice to be printed
+    setPrintingInvoice(invoice);
+    // Open the modal
+    setPrintModalOpen(true);
+  };
+
+  // Create a function to handle the actual printing
+  const handlePrintInvoice = () => {
+    if (printRef.current) {
+      // Create a new hidden iframe
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      
+      // Write the content to the iframe
+      const content = printRef.current.innerHTML;
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      
+      if (doc) {
+        doc.open();
+        doc.write(`
+          <html>
+            <head>
+              <title>Print Invoice</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .invoice-header { text-align: center; margin-bottom: 30px; }
+                .invoice-title { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 5px; }
+                .invoice-number { font-size: 16px; color: #666; }
+                table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+                th, td { border: 1px solid #ddd; padding: 12px 8px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                .amount-row { font-weight: bold; background-color: #f9f9f9; }
+                .status-paid { color: green; font-weight: bold; }
+                .status-unpaid { color: red; font-weight: bold; }
+                .customer-info { margin-bottom: 20px; }
+                .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; }
+                @media print {
+                  body { margin: 0; }
+                  @page { margin: 1.5cm; }
+                }
+              </style>
+            </head>
+            <body>${content}</body>
+          </html>
+        `);
+        doc.close();
+        
+        // Use timeout to ensure content is loaded
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          
+          // Remove the iframe after printing
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 500);
+        }, 250);
+      }
     }
   };
 
@@ -730,73 +815,79 @@ export default function Billing() {
                               </div>
                             </TableCell>
                             <TableCell className="font-medium">
-                              KES {invoice.amount.toFixed(2)}
+                            KES {invoice.amount.toFixed(2)}
                             </TableCell>
                             <TableCell>
-                              {new Date(invoice.dueDate).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric'
-                              })}
+                              {new Date(invoice.dueDate).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               <Badge
                                 variant={invoice.status === "paid" ? "success" : "destructive"}
-                                className={`${
-                                  invoice.status === "paid" 
-                                    ? "bg-green-100 text-green-800 hover:bg-green-200" 
+                                className={
+                                  invoice.status === "paid"
+                                    ? "bg-green-100 text-green-800 hover:bg-green-200"
                                     : "bg-red-100 text-red-800 hover:bg-red-200"
-                                } transition-colors`}
+                                }
                               >
                                 {invoice.status === "paid" ? (
-                                  <span className="flex items-center gap-1">
-                                    <CheckCircle className="h-3 w-3" />
-                                    Paid
-                                  </span>
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
                                 ) : (
-                                  <span className="flex items-center gap-1">
-                                    <XCircle className="h-3 w-3" />
-                                    Unpaid
-                                  </span>
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />
                                 )}
+                                {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
+                              <div className="flex items-center justify-end gap-2">
                                 <Button
-                                  variant={invoice.status === "paid" ? "destructive" : "default"}
+                                  variant="ghost"
                                   size="sm"
-                                  onClick={() =>
-                                    handleUpdateInvoiceStatus(
-                                      invoice._id,
-                                      invoice.status === "paid" ? "unpaid" : "paid",
-                                      invoice.invoiceNumber
-                                    )
-                                  }
-                                  disabled={submitting}
-                                  className={invoice.status === "paid" 
-                                    ? "bg-red-600 hover:bg-red-700" 
-                                    : "bg-green-600 hover:bg-green-700"}
+                                  onClick={() => handlePrint(invoice)}
+                                  className="text-gray-500 hover:text-blue-700 transition-colors"
                                 >
-                                  {submitting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : invoice.status === "paid" ? (
-                                    <span className="flex items-center gap-1">
-                                      <XCircle className="h-4 w-4" />
-                                      Unpaid
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1">
-                                      <CheckCircle className="h-4 w-4" />
-                                      Paid
-                                    </span>
-                                  )}
+                                  <Printer className="h-4 w-4" />
                                 </Button>
+                                {invoice.status === "unpaid" ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleUpdateInvoiceStatus(
+                                        invoice._id,
+                                        "paid",
+                                        invoice.invoiceNumber
+                                      )
+                                    }
+                                    className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 transition-colors"
+                                    disabled={submitting}
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Mark Paid
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleUpdateInvoiceStatus(
+                                        invoice._id,
+                                        "unpaid",
+                                        invoice.invoiceNumber
+                                      )
+                                    }
+                                    className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:border-amber-300 transition-colors"
+                                    disabled={submitting}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Mark Unpaid
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => openDeleteDialog(invoice)}
-                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                  className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors"
+                                  disabled={submitting}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -806,27 +897,37 @@ export default function Billing() {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-10">
-                            <div className="flex flex-col items-center justify-center text-gray-500">
-                              <Receipt className="h-10 w-10 mb-2 text-gray-300" />
-                              <p className="font-medium text-lg mb-1">No invoices found</p>
-                              <p className="text-gray-500 text-sm">
-                                {activeTab === "all" 
-                                  ? "You haven't created any invoices yet." 
-                                  : `No ${activeTab} invoices found.`}
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <div className="flex flex-col items-center text-gray-500">
+                              <Receipt className="h-12 w-12 text-gray-300 mb-2" />
+                              <p className="text-lg font-medium">No invoices found</p>
+                              <p className="text-sm max-w-md mx-auto mt-1">
+                                {activeTab === "all"
+                                  ? "No invoices have been created yet. Create your first invoice to get started."
+                                  : activeTab === "paid"
+                                  ? "No paid invoices found. You can mark invoices as paid from the action menu."
+                                  : "No unpaid invoices found. All your invoices are marked as paid."}
                               </p>
-                              <Button 
-                                variant="outline" 
-                                onClick={() => setActiveTab("all")}
-                                className="mt-4"
-                              >
-                                View all invoices
-                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
+                    {filteredInvoices.length > 0 && (
+                      <TableFooter className="bg-gray-50">
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-left">
+                            Total Invoices: {filteredInvoices.length}
+                          </TableCell>
+                          <TableCell colSpan={3} className="text-right font-bold">
+                            Total Amount: KES{" "}
+                            {filteredInvoices
+                              .reduce((sum, invoice) => sum + invoice.amount, 0)
+                              .toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      </TableFooter>
+                    )}
                   </Table>
                 </div>
               </CardContent>
@@ -835,38 +936,62 @@ export default function Billing() {
         </Tabs>
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
               Confirm Deletion
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to delete invoice{" "}
-              <span className="font-semibold">#{invoiceToDelete?.invoiceNumber}</span> for{" "}
-              <span className="font-semibold">{invoiceToDelete?.customerName}</span>?
+              <span className="font-medium">{invoiceToDelete?.invoiceNumber}</span>?
               This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="p-4 bg-red-50 rounded-lg border border-red-100 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-full">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="font-medium text-red-800">Warning</p>
-                <p className="text-sm text-red-600">
-                  This will permanently delete the invoice and all associated data.
-                </p>
-              </div>
+            <div className="flex flex-col gap-1">
+              <p>
+                <span className="font-medium">Customer:</span>{" "}
+                {invoiceToDelete?.customerName}
+              </p>
+              <p>
+                <span className="font-medium">Amount:</span> KES{" "}
+                {invoiceToDelete?.amount.toFixed(2)}
+              </p>
+              <p>
+                <span className="font-medium">Due Date:</span>{" "}
+                {invoiceToDelete?.dueDate &&
+                  new Date(invoiceToDelete.dueDate).toLocaleDateString()}
+              </p>
+              <p>
+                <span className="font-medium">Status:</span>{" "}
+                <Badge
+                  variant={invoiceToDelete?.status === "paid" ? "success" : "destructive"}
+                  className={
+                    invoiceToDelete?.status === "paid"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }
+                >
+                  {invoiceToDelete?.status === "paid" ? (
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {invoiceToDelete?.status &&
+                    invoiceToDelete.status.charAt(0).toUpperCase() +
+                      invoiceToDelete.status.slice(1)}
+                </Badge>
+              </p>
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
+              className="border-gray-300"
             >
               Cancel
             </Button>
@@ -887,6 +1012,92 @@ export default function Billing() {
                   Delete Invoice
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Modal Dialog */}
+      <Dialog open={printModalOpen} onOpenChange={setPrintModalOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Print Invoice
+            </DialogTitle>
+            <DialogDescription>
+              Preview the invoice before printing
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-4 border rounded-lg p-6 bg-white">
+            <Print ref={printRef}>
+              <div className="invoice-header">
+                <h1 className="invoice-title">INVOICE</h1>
+                <p className="invoice-number">{printingInvoice?.invoiceNumber}</p>
+              </div>
+              
+              <div className="customer-info">
+                <p><strong>Customer:</strong> {printingInvoice?.customerName}</p>
+                <p><strong>Phone:</strong> {printingInvoice?.customerPhone}</p>
+                <p><strong>Due Date:</strong> {printingInvoice?.dueDate && 
+                  new Date(printingInvoice.dueDate).toLocaleDateString()}</p>
+                <p><strong>Status:</strong> <span className={printingInvoice?.status === "paid" ? 
+                  "status-paid" : "status-unpaid"}>
+                  {printingInvoice?.status && 
+                    (printingInvoice.status.charAt(0).toUpperCase() + printingInvoice.status.slice(1))}
+                </span></p>
+              </div>
+              
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item Description</th>
+                    <th>Quantity</th>
+                    <th>Unit Price (KES)</th>
+                    <th>Total (KES)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printingInvoice?.items.map((item, index) => {
+                    const inventoryItem = inventory.find((i) => i._id === item.itemId);
+                    return (
+                      <tr key={index}>
+                        <td>{inventoryItem?.name}</td>
+                        <td>{item.quantity}</td>
+                        <td>{inventoryItem?.price.toFixed(2)}</td>
+                        <td>{inventoryItem ? (inventoryItem.price * item.quantity).toFixed(2) : "0.00"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="amount-row">
+                    <td colSpan={3}><strong>TOTAL AMOUNT</strong></td>
+                    <td><strong>KES {printingInvoice?.amount.toFixed(2)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+              
+              <div className="footer">
+                <p>Thank you for your business!</p>
+                <p>Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+              </div>
+            </Print>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPrintModalOpen(false)}
+              className="border-gray-300"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handlePrintInvoice}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Invoice
             </Button>
           </DialogFooter>
         </DialogContent>
