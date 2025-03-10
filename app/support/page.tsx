@@ -65,8 +65,8 @@ export default function SupportPage() {
                     <div className="bg-purple-50 p-5 rounded-lg border border-purple-100">
                       <h3 className="font-medium text-purple-700 mb-2">Office Address</h3>
                       <p className="text-gray-700">
-                        123 Business Ave, Suite 456<br />
-                        New York, NY 10001
+                        A 104<br />
+                        Nairobi Kenya
                       </p>
                     </div>
                     
