@@ -1,47 +1,16 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
 import { useState, useEffect } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { 
-  Users, 
-  Shield, 
-  AlertCircle, 
-  CheckCircle, 
-  Calendar, 
-  MoreVertical,
-  RefreshCw
-} from "lucide-react"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Bell, Search, Filter, Users, Clock } from "lucide-react"
 
 interface User {
   _id: string
   name: string
   email: string
+  phone: string
   role: string
   suspended: boolean
   paymentDue?: number
@@ -51,24 +20,62 @@ interface User {
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [sortField, setSortField] = useState<keyof User>("name")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [extendDays, setExtendDays] = useState("30")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState<string>("all")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false)
+  const [showActionDialog, setShowActionDialog] = useState(false)
+  const [extendDays, setExtendDays] = useState("30")
   const router = useRouter()
 
   useEffect(() => {
     fetchUsers()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (users.length) {
+      applyFilters()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, searchTerm, filterStatus])
+
+
+  const applyFilters = () => {
+    let result = [...users]
+    
+    // Apply search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      result = result.filter(user => 
+        user.name.toLowerCase().includes(term) || 
+        user.email.toLowerCase().includes(term) ||
+        (user.phone && user.phone.toLowerCase().includes(term))
+      )
+    }
+    
+    // Apply status filter
+    if (filterStatus !== "all") {
+      if (filterStatus === "active") {
+        result = result.filter(user => !user.suspended && user.subscriptionStatus === "active")
+      } else if (filterStatus === "suspended") {
+        result = result.filter(user => user.suspended)
+      } else if (filterStatus === "expired") {
+        result = result.filter(user => user.subscriptionStatus === "expired")
+      } else if (filterStatus === "inactive") {
+        result = result.filter(user => user.subscriptionStatus === "inactive")
+      }
+    }
+    
+    setFilteredUsers(result)
+  }
 
   const fetchUsers = async () => {
     try {
-      setIsRefreshing(true)
+      setIsLoading(true)
       const token = localStorage.getItem("token")
       if (!token) {
         router.push("/login")
@@ -78,110 +85,68 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       })
       setUsers(response.data)
+      setFilteredUsers(response.data)
       setIsLoading(false)
-      setIsRefreshing(false)
     } catch (error) {
       console.error("Error fetching users:", error)
       setError("An error occurred while fetching users")
       setIsLoading(false)
-      setIsRefreshing(false)
     }
   }
 
   const handleUserAction = async (userId: string, action: "suspend" | "unsuspend" | "extend" | "cancel") => {
     try {
       const token = localStorage.getItem("token")
+      await axios.put(
+        "/api/admin/users",
+        { 
+          targetUserId: userId, 
+          action,
+          ...(action === "extend" && { days: parseInt(extendDays) })
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
       
-      if (action === "extend") {
-        await axios.put(
-          "/api/admin/users",
-          { targetUserId: userId, action, days: parseInt(extendDays) },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        )
-      } else {
-        await axios.put(
-          "/api/admin/users",
-          { targetUserId: userId, action },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        )
-      }
+      // Close dialog after action
+      setShowActionDialog(false)
+      setSelectedUser(null)
       
+      // Refresh user data
       fetchUsers()
     } catch (error) {
       console.error(`Error performing action on user:`, error)
       setError(`An error occurred while performing the action`)
     }
   }
-
-  const handleSubscriptionExtend = (user: User) => {
+  
+  const openActionDialog = (user: User) => {
     setSelectedUser(user)
-    setIsExtendDialogOpen(true)
-  }
-
-  const confirmExtend = () => {
-    if (selectedUser) {
-      handleUserAction(selectedUser._id, "extend")
-      setIsExtendDialogOpen(false)
-    }
+    setShowActionDialog(true)
   }
 
   const calculateProgress = () => {
-    const activeUsers = users.filter((user) => !user.suspended).length
+    const activeUsers = users.filter((user) => !user.suspended && user.subscriptionStatus === "active").length
     return (activeUsers / 100) * 100
   }
 
-  const sortUsers = (a: User, b: User) => {
-    // Handle string and boolean fields
-    if (sortField === "name" || sortField === "email" || sortField === "role") {
-      return sortDirection === "asc" 
-        ? String(a[sortField]).localeCompare(String(b[sortField]))
-        : String(b[sortField]).localeCompare(String(a[sortField]))
-    }
+  const getStatusColor = (status: string | undefined, suspended: boolean) => {
+    if (suspended) return "bg-red-100 text-red-800"
     
-    // Handle boolean fields (suspended)
-    if (sortField === "suspended") {
-      return sortDirection === "asc"
-        ? Number(a[sortField]) - Number(b[sortField])
-        : Number(b[sortField]) - Number(a[sortField])
-    }
-
-    // Default sort by name
-    return sortDirection === "asc"
-      ? a.name.localeCompare(b.name)
-      : b.name.localeCompare(a.name)
-  }
-
-  const handleSort = (field: keyof User) => {
-    if (field === sortField) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      setSortField(field)
-      setSortDirection("asc")
+    switch(status) {
+      case "active": return "bg-green-100 text-green-800"
+      case "inactive": return "bg-yellow-100 text-yellow-800"
+      case "expired": return "bg-red-100 text-red-800"
+      default: return "bg-gray-100 text-gray-800"
     }
   }
 
-  const filteredUsers = users
-  .filter((user) => 
-    (user.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-    (user.email?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-    (user.role?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-  )
-  .sort(sortUsers)
-  
   if (isLoading) {
     return (
       <NavbarLayout>
-        <div className="min-h-screen bg-gray-50 p-6">
-          <div className="max-w-6xl mx-auto">
-            <Skeleton className="h-12 w-64 mb-8" />
-            <Skeleton className="h-48 w-full mb-8 rounded-lg" />
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-96 w-full rounded-lg" />
-          </div>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       </NavbarLayout>
     )
@@ -190,16 +155,16 @@ export default function AdminDashboard() {
   if (error) {
     return (
       <NavbarLayout>
-        <div className="min-h-screen bg-gray-50 p-6">
-          <div className="max-w-6xl mx-auto text-center py-12">
-            <div className="rounded-full bg-red-100 p-3 w-12 h-12 mx-auto mb-4 flex items-center justify-center">
-              <AlertCircle className="h-6 w-6 text-red-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Dashboard</h1>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <Button onClick={fetchUsers} variant="default">
+        <div className="min-h-screen p-8">
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded" role="alert">
+            <p className="font-bold">Error</p>
+            <p>{error}</p>
+            <button 
+              onClick={() => fetchUsers()}
+              className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
               Try Again
-            </Button>
+            </button>
           </div>
         </div>
       </NavbarLayout>
@@ -208,300 +173,344 @@ export default function AdminDashboard() {
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-500 mt-1">Manage users and subscriptions</p>
-            </div>
-            <Button 
-              onClick={fetchUsers} 
-              variant="outline" 
-              className="flex items-center gap-2"
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-              {isRefreshing ? "Refreshing..." : "Refresh Data"}
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <Users className="h-5 w-5 text-indigo-500" />
-                  Total Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{users.length}</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  Active Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{users.filter(u => !u.suspended).length}</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-yellow-500" />
-                  Suspended Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{users.filter(u => u.suspended).length}</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-indigo-500" />
-                Deployment Progress
-              </CardTitle>
-              <CardDescription>Target: 100 active users</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Progress value={calculateProgress()} className="h-2" />
-              <div className="mt-4 text-sm text-gray-500 flex justify-between">
-                <span>0</span>
-                <span>Current: {users.filter((user) => !user.suspended).length}</span>
-                <span>100</span>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
+          <div className="px-6 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-semibold text-gray-800">Admin Dashboard</h1>
+            <div className="flex items-center space-x-4">
+              <button className="p-2 rounded-full hover:bg-gray-100">
+                <Bell size={20} />
+              </button>
+              <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                A
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-indigo-500" />
-                User Management
-              </CardTitle>
-              <CardDescription>
-                Manage user accounts and subscriptions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
-                <div className="relative flex-grow">
-                  <Input
-                    type="text"
-                    placeholder="Search by name, email, or role..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10"
-                  />
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
+        <div className="p-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm">Active Users</p>
+                  <h2 className="text-3xl font-bold mt-1">
+                    {users.filter(u => !u.suspended && u.subscriptionStatus === "active").length}
+                  </h2>
+                </div>
+                <div className="bg-blue-100 p-3 rounded-full">
+                  <Users size={20} className="text-blue-600" />
                 </div>
               </div>
+              <div className="mt-4">
+                <div className="text-sm text-gray-500 mb-1">Target: 100 users</div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full" 
+                    style={{ width: `${calculateProgress()}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm">Suspended Users</p>
+                  <h2 className="text-3xl font-bold mt-1">
+                    {users.filter(u => u.suspended).length}
+                  </h2>
+                </div>
+                <div className="bg-red-100 p-3 rounded-full">
+                  <Users size={20} className="text-red-600" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="text-sm text-gray-500">
+                  {users.filter(u => u.suspended).length > 0 
+                    ? `${((users.filter(u => u.suspended).length / users.length) * 100).toFixed(1)}% of total users` 
+                    : "No suspended users"}
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm">Expiring Soon</p>
+                  <h2 className="text-3xl font-bold mt-1">
+                    {users.filter(u => {
+                      if (!u.subscriptionEndDate) return false;
+                      const endDate = new Date(u.subscriptionEndDate);
+                      const today = new Date();
+                      const diffDays = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+                      return diffDays <= 7 && diffDays > 0;
+                    }).length}
+                  </h2>
+                </div>
+                <div className="bg-yellow-100 p-3 rounded-full">
+                  <Clock size={20} className="text-yellow-600" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="text-sm text-gray-500">Subscriptions expiring in 7 days</div>
+              </div>
+            </div>
+          </div>
 
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th 
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort("name")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Name
-                          {sortField === "name" && (
-                            <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort("email")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Email
-                          {sortField === "email" && (
-                            <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort("role")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Role
-                          {sortField === "role" && (
-                            <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort("suspended")}
-                      >
-                        <div className="flex items-center gap-1">
-                          Status
-                          {sortField === "suspended" && (
-                            <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subscription
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        End Date
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
-                          No users match your search criteria
+          {/* Search and Filters */}
+          <div className="bg-white rounded-lg shadow mb-6">
+            <div className="p-4 flex flex-col md:flex-row justify-between space-y-4 md:space-y-0">
+              <div className="relative flex-1 max-w-xl">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={18} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search users by name, email or phone..."
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              
+              <div className="flex space-x-2">
+                <div className="relative">
+                  <select
+                    className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
+                    <option value="all">All Users</option>
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="expired">Expired</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <Filter size={16} className="text-gray-400" />
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterStatus("all");
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* User Table */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Subscription
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <tr key={user._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                              {user.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                              <div className="text-sm text-gray-500">{user.phone}</div>
+                            </div>
+                          </div>
                         </td>
-                      </tr>
-                    ) : (
-                      filteredUsers.map((user) => (
-                        <tr key={user._id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="font-medium text-gray-900">{user.name}</div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Badge variant={user.role === "admin" ? "destructive" : "outline"}>
-                              {user.role}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Badge variant={user.suspended ? "destructive" : "success"}>
-                              {user.suspended ? "Suspended" : "Active"}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Badge 
-                              variant={
-                                user.subscriptionStatus === "active"
-                                  ? "success"
-                                  : user.subscriptionStatus === "expired"
-                                    ? "destructive"
-                                    : "secondary"
-                              }
-                            >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs rounded-full ${user.suspended ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
+                            {user.suspended ? "Suspended" : "Active"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className={`px-2 py-1 text-xs rounded-full inline-block w-fit ${getStatusColor(user.subscriptionStatus, false)}`}>
                               {user.subscriptionStatus
                                 ? user.subscriptionStatus.charAt(0).toUpperCase() + user.subscriptionStatus.slice(1)
                                 : "N/A"}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4 text-gray-400" />
-                              {user.subscriptionEndDate ? new Date(user.subscriptionEndDate).toLocaleDateString() : "N/A"}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                  onClick={() => handleUserAction(user._id, user.suspended ? "unsuspend" : "suspend")}
-                                  className={user.suspended ? "text-green-600" : "text-red-600"}
-                                >
-                                  {user.suspended ? "Unsuspend User" : "Suspend User"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleSubscriptionExtend(user)}
-                                >
-                                  Extend Subscription
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleUserAction(user._id, "cancel")}
-                                  className="text-yellow-600"
-                                >
-                                  Cancel Subscription
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                            </span>
+                            <span className="text-sm text-gray-500 mt-1">
+                              {user.subscriptionEndDate 
+                                ? new Date(user.subscriptionEndDate).toLocaleDateString() 
+                                : "No end date"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <button
+                            onClick={() => openActionDialog(user)}
+                            className="text-blue-600 hover:text-blue-900 hover:underline"
+                          >
+                            Manage
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                        No users found matching your search criteria
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {filteredUsers.length > 0 && (
+              <div className="bg-gray-50 px-6 py-3 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Showing {filteredUsers.length} of {users.length} users
+                </div>
+                {/* Pagination could be added here */}
               </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <div className="text-sm text-gray-500">
-                Showing {filteredUsers.length} of {users.length} users
-              </div>
-            </CardFooter>
-          </Card>
+            )}
+          </div>
         </div>
       </div>
-
-      <Dialog open={isExtendDialogOpen} onOpenChange={setIsExtendDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Extend Subscription</DialogTitle>
-            <DialogDescription>
-              {selectedUser && (
-                <span>Extend the subscription for {selectedUser.name}</span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="days" className="block text-sm font-medium text-gray-700 mb-1">
-              Number of days to extend
-            </Label>
-            <Input
-              id="days"
-              type="number"
-              value={extendDays}
-              onChange={(e) => setExtendDays(e.target.value)}
-              min="1"
-              className="mt-1 block w-full"
-            />
+      
+      {/* Action Dialog */}
+      {showActionDialog && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Manage User</h3>
+                <button 
+                  onClick={() => {
+                    setShowActionDialog(false)
+                    setSelectedUser(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <div className="flex items-center mb-4">
+                  <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                    {selectedUser.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="ml-4">
+                    <div className="font-medium">{selectedUser.name}</div>
+                    <div className="text-sm text-gray-500">{selectedUser.email}</div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                  <div className="p-3 bg-gray-50 rounded">
+                    <div className="text-gray-500">Status</div>
+                    <div className={`font-medium ${selectedUser.suspended ? "text-red-600" : "text-green-600"}`}>
+                      {selectedUser.suspended ? "Suspended" : "Active"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded">
+                    <div className="text-gray-500">Subscription</div>
+                    <div className="font-medium">
+                      {selectedUser.subscriptionStatus
+                        ? selectedUser.subscriptionStatus.charAt(0).toUpperCase() + selectedUser.subscriptionStatus.slice(1)
+                        : "N/A"}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded">
+                    <div className="text-gray-500">Role</div>
+                    <div className="font-medium">{selectedUser.role}</div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded">
+                    <div className="text-gray-500">End Date</div>
+                    <div className="font-medium">
+                      {selectedUser.subscriptionEndDate 
+                        ? new Date(selectedUser.subscriptionEndDate).toLocaleDateString() 
+                        : "N/A"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {/* Suspend/Unsuspend Button */}
+                <button
+                  onClick={() => handleUserAction(selectedUser._id, selectedUser.suspended ? "unsuspend" : "suspend")}
+                  className={`w-full py-2 px-4 rounded text-white ${
+                    selectedUser.suspended
+                      ? "bg-green-500 hover:bg-green-600"
+                      : "bg-red-500 hover:bg-red-600"
+                  }`}
+                >
+                  {selectedUser.suspended ? "Unsuspend User" : "Suspend User"}
+                </button>
+                
+                {/* Extend Subscription */}
+                {!selectedUser.suspended && (
+                  <div>
+                    <div className="flex items-center space-x-3 mb-3">
+                      <input
+                        type="number"
+                        min="1"
+                        value={extendDays}
+                        onChange={(e) => setExtendDays(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <span className="text-sm text-gray-500">days</span>
+                    </div>
+                    <button
+                      onClick={() => handleUserAction(selectedUser._id, "extend")}
+                      className="w-full py-2 px-4 rounded bg-blue-500 hover:bg-blue-600 text-white"
+                    >
+                      Extend Subscription
+                    </button>
+                  </div>
+                )}
+                
+                {/* Cancel Subscription */}
+                <button
+                  onClick={() => handleUserAction(selectedUser._id, "cancel")}
+                  className="w-full py-2 px-4 rounded bg-gray-200 hover:bg-gray-300 text-gray-800"
+                >
+                  Cancel Subscription
+                </button>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsExtendDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={confirmExtend}>
-              Extend Subscription
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </NavbarLayout>
   )
 }
