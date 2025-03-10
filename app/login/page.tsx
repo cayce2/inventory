@@ -282,8 +282,8 @@ export default function Login() {
           </Card>
           
           <div className="flex items-center justify-center gap-3 mt-8">
-            <Link href="/help" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Help
+            <Link href="/rights" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
+              Rights
             </Link>
             <span className="text-gray-300">•</span>
             <Link href="/privacy" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
