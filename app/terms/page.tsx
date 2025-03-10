@@ -59,7 +59,7 @@ export default function TermsPage() {
                 },
                 {
                   title: "Governing Law",
-                  content: "These Terms shall be governed and construed in accordance with the laws of [Your Country/State], without regard to its conflict of law provisions."
+                  content: "These Terms shall be governed and construed in accordance with the laws of the Kenyan constitution, without regard to its conflict of law provisions."
                 },
                 {
                   title: "Changes to Terms",

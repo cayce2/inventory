@@ -293,6 +293,10 @@ export default function Login() {
             <Link href="/terms" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
               Terms
             </Link>
+            <span className="text-gray-300">•</span>
+            <Link href="/support" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
+              Support
+            </Link>
           </div>
         </div>
       </div>
