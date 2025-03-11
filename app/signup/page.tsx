@@ -9,15 +9,17 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Checkbox } from "@/components/ui/checkbox"
 import NavbarLayout from "@/components/NavbarLayout"
 import Link from "next/link"
 
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: "",
-    phone:"",
+    phone: "",
     email: "",
     password: "",
+    acceptTerms: false,
   })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
@@ -27,6 +29,7 @@ export default function Signup() {
     phone: false,
     email: false,
     password: false,
+    acceptTerms: false,
   })
   const router = useRouter()
 
@@ -34,6 +37,11 @@ export default function Signup() {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     setError("") // Clear error when user types
+  }
+
+  const handleCheckboxChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, acceptTerms: checked }))
+    setError("") // Clear error when user interacts with checkbox
   }
 
   const handleBlur = (field: string) => {
@@ -57,8 +65,12 @@ export default function Signup() {
     switch (field) {
       case "name":
         return !formData.name.trim() ? "Name is required" : null
-        case "phone":
-          return !formData.phone.trim() ? "Phone is required" : null
+      case "phone":
+        return !formData.phone.trim() 
+          ? "Phone number is required" 
+          : !formData.phone.startsWith("+254") 
+            ? "Please enter a valid phone number starting with +254" 
+            : null
       case "email":
         return !formData.email.trim() 
           ? "Email is required" 
@@ -69,6 +81,10 @@ export default function Signup() {
         return formData.password.length < 6 
           ? "Password must be at least 6 characters" 
           : null
+      case "acceptTerms":
+        return !formData.acceptTerms 
+          ? "You must accept the Terms and Conditions" 
+          : null
       default:
         return null
     }
@@ -76,10 +92,12 @@ export default function Signup() {
 
   const validateForm = () => {
     if (!formData.name.trim()) return "Name is required"
-    if (!formData.phone.trim()) return "Phone is required"
+    if (!formData.phone.trim()) return "Phone number is required"
+    if (!formData.phone.startsWith("+254")) return "Please enter a valid phone number starting with +254"
     if (!formData.email.trim()) return "Email is required"
     if (!formData.email.includes("@")) return "Please enter a valid email"
     if (formData.password.length < 6) return "Password must be at least 6 characters"
+    if (!formData.acceptTerms) return "You must accept the Terms and Conditions"
     return null
   }
 
@@ -92,6 +110,7 @@ export default function Signup() {
       phone: true,
       email: true,
       password: true,
+      acceptTerms: true,
     })
     
     const validationError = validateForm()
@@ -150,7 +169,7 @@ export default function Signup() {
                     <Input
                       id="name"
                       name="name"
-                      placeholder="Enter your name"
+                      placeholder="John Doe"
                       value={formData.name}
                       onChange={handleInputChange}
                       onBlur={() => handleBlur("name")}
@@ -170,10 +189,10 @@ export default function Signup() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label htmlFor="name" className="text-sm font-medium">
+                    <label htmlFor="phone" className="text-sm font-medium">
                       Phone Number
                     </label>
-                    {touched.phone && getFieldError("name") && (
+                    {touched.phone && getFieldError("phone") && (
                       <span className="text-xs text-red-500">{getFieldError("phone")}</span>
                     )}
                   </div>
@@ -182,7 +201,7 @@ export default function Signup() {
                     <Input
                       id="phone"
                       name="phone"
-                      placeholder="Enter your phone number"
+                      placeholder="+254 712 345 678"
                       value={formData.phone}
                       onChange={handleInputChange}
                       onBlur={() => handleBlur("phone")}
@@ -194,10 +213,11 @@ export default function Signup() {
                             : ""
                       }`}
                     />
-                    {touched.name && !getFieldError("phone") && formData.phone.trim() && (
+                    {touched.phone && !getFieldError("phone") && formData.phone.trim() && (
                       <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                     )}
                   </div>
+                  <p className="text-xs text-gray-500">Format: +254 followed by your number (e.g., +254 712 345 678)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -215,7 +235,7 @@ export default function Signup() {
                       id="email"
                       name="email"
                       type="email"
-                      placeholder="your.email@example.com"
+                      placeholder="john.doe@example.com"
                       value={formData.email}
                       onChange={handleInputChange}
                       onBlur={() => handleBlur("email")}
@@ -308,6 +328,43 @@ export default function Signup() {
                     </div>
                   )}
                 </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox 
+                      id="acceptTerms" 
+                      checked={formData.acceptTerms}
+                      onCheckedChange={handleCheckboxChange}
+                      onBlur={() => handleBlur("acceptTerms")}
+                      className={`mt-1 ${
+                        touched.acceptTerms && !formData.acceptTerms 
+                          ? "border-red-500 ring-red-100" 
+                          : ""
+                      }`}
+                    />
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="acceptTerms"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        I accept the Terms and Conditions
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        By checking this box, you agree to our{" "}
+                        <Link href="/terms" className="text-indigo-600 hover:text-indigo-500 transition-colors">
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" className="text-indigo-600 hover:text-indigo-500 transition-colors">
+                          Privacy Policy
+                        </Link>.
+                      </p>
+                      {touched.acceptTerms && getFieldError("acceptTerms") && (
+                        <span className="text-xs text-red-500 block mt-1">{getFieldError("acceptTerms")}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <Button
                   type="submit"
@@ -338,13 +395,6 @@ export default function Signup() {
               </p>
             </CardFooter>
           </Card>
-          
-          <p className="text-center text-xs text-gray-500 mt-6">
-            By creating an account, you agree to our{" "}
-            <Link href="/terms" className="underline hover:text-gray-700">Terms of Service</Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="underline hover:text-gray-700">Privacy Policy</Link>.
-          </p>
         </div>
       </div>
     </NavbarLayout>
