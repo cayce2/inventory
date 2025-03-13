@@ -102,15 +102,15 @@ export const reportPeriodSchema = z
   })
   .refine(
     (data) => {
-      // If customDateRange is true, both startDate and endDate must be provided
-      if (data.customDateRange) {
+      // If customDateRange is true, both startDate and endDate should be provided
+      if (data.customDateRange === true) {
         return !!data.startDate && !!data.endDate
       }
-      // Otherwise, period must be provided
-      return !!data.period
+      // Otherwise, we'll accept any input and use defaults
+      return true
     },
     {
-      message: "Either period or both startDate and endDate must be provided",
+      message: "When using custom date range, both startDate and endDate must be provided",
     },
   )
 

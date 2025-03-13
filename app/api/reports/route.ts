@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest,NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import * as XLSX from "xlsx"
@@ -15,29 +15,16 @@ export async function GET(req: NextRequest) {
 
     // Parse URL to get query parameters
     const url = new URL(req.url)
-    const period = url.searchParams.get("period")
+    const period = url.searchParams.get("period") || "all"
     const startDate = url.searchParams.get("startDate")
     const endDate = url.searchParams.get("endDate")
 
-    // Validate parameters
-    if (!period && (!startDate || !endDate)) {
-      return NextResponse.json(
-        {
-          error: "Either period or both startDate and endDate must be provided",
-        },
-        { status: 400 },
-      )
-    }
-
+    // Validate date formats if provided
     if (startDate && endDate) {
-      // Validate date formats
       if (isNaN(Date.parse(startDate)) || isNaN(Date.parse(endDate))) {
+        console.error("Invalid date format:", { startDate, endDate })
         return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
       }
-    }
-
-    if (period && !["day", "week", "month", "quarter", "year", "all"].includes(period)) {
-      return NextResponse.json({ error: "Invalid period value" }, { status: 400 })
     }
 
     const client = await clientPromise
@@ -112,11 +99,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch restock history with date filter
-    const restockQuery: any = { userId }
+    const restockQuery: any = { userId: new ObjectId(userId) }
     if (Object.keys(dateFilter).length > 0) {
       restockQuery.date = dateFilter
     }
+    console.log("Restock query:", JSON.stringify(restockQuery))
     const restockHistory = await db.collection("restockHistory").find(restockQuery).toArray()
+    console.log(`Found ${restockHistory.length} restock history records`)
 
     // Create a worksheet for inventory
     const inventoryWs = XLSX.utils.json_to_sheet(
@@ -154,17 +143,21 @@ export async function GET(req: NextRequest) {
       })),
     )
 
-    // Create a worksheet for restock history
+    // Create a worksheet for restock history with more detailed information
     const restockHistoryWs = XLSX.utils.json_to_sheet(
       restockHistory.map((record) => {
-        const item = inventory.find((invItem) => invItem._id.toString() === record.itemId.toString())
+        const item = inventory.find(
+          (invItem) => invItem._id.toString() === (record.itemId ? record.itemId.toString() : ""),
+        )
         return {
           "Item Name": item ? item.name : "Unknown",
           "Restock Quantity": record.quantity,
-          "Restock Date": new Date(record.date).toLocaleDateString(),
+          "Restock Date": record.date ? new Date(record.date).toLocaleDateString() : "N/A",
           "Previous Quantity": record.previousQuantity !== undefined ? record.previousQuantity : "N/A",
           "New Quantity":
             record.previousQuantity !== undefined ? record.previousQuantity + record.quantity : record.quantity,
+          "User ID": record.userId ? record.userId.toString() : "N/A",
+          "Item ID": record.itemId ? record.itemId.toString() : "N/A",
         }
       }),
     )
@@ -190,7 +183,15 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error("Error generating report:", error)
-    return NextResponse.json({ error: "An error occurred while generating the report" }, { status: 500 })
+    // Provide more detailed error information
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return NextResponse.json(
+      {
+        error: "An error occurred while generating the report",
+        details: errorMessage,
+      },
+      { status: 500 },
+    )
   }
 }
 
