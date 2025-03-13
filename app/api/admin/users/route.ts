@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { NextResponse, NextRequest } from "next/server"
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
+import { userActionSchema } from "@/lib/validations"
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,10 +46,22 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { targetUserId, action, days } = await req.json()
-    if (!targetUserId || !action) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+    const data = await req.json()
+
+    // Validate input data
+    try {
+      userActionSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { targetUserId, action, days } = data
 
     const update: { $set: Record<string, any> } = { $set: {} }
     switch (action) {

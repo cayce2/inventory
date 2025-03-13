@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import clientPromise from "@/lib/mongodb"
 import { generateToken } from "@/lib/auth-middleware"
 import { rateLimit } from "@/lib/rate-limiter"
+import { loginSchema } from "@/lib/validations"
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,11 +14,22 @@ export async function POST(req: NextRequest) {
       return rateLimitResponse
     }
 
-    const { email, password } = await req.json()
+    const data = await req.json()
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
+    // Validate input data
+    try {
+      loginSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { email, password } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")

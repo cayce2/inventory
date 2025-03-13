@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 import bcrypt from "bcryptjs"
+import { passwordUpdateSchema } from "@/lib/validations"
 
 export async function PUT(req: NextRequest) {
   try {
@@ -11,11 +13,22 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { currentPassword, newPassword } = await req.json()
+    const data = await req.json()
 
-    if (!currentPassword || !newPassword) {
-      return NextResponse.json({ error: "Current password and new password are required" }, { status: 400 })
+    // Validate input data
+    try {
+      passwordUpdateSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { currentPassword, newPassword } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")

@@ -1,17 +1,37 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
 import clientPromise from "@/lib/mongodb"
 import { ObjectId } from "mongodb"
 import { generateToken } from "@/lib/auth-middleware"
+import { refreshTokenSchema } from "@/lib/validations"
+import { rateLimit } from "@/lib/rate-limiter"
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { token } = await req.json()
-
-    if (!token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 })
+    // Apply rate limiting
+    const rateLimitResponse = await rateLimit(req)
+    if (rateLimitResponse) {
+      return rateLimitResponse
     }
+
+    const data = await req.json()
+
+    // Validate input data
+    try {
+      refreshTokenSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
+    }
+
+    const { token } = data
 
     if (!process.env.JWT_SECRET) {
       console.error("JWT_SECRET is not defined")

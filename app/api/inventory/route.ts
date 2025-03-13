@@ -4,6 +4,7 @@ import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 import sharp from "sharp"
+import { inventoryItemSchema, restockSchema, deleteItemSchema } from "@/lib/validations"
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,11 +32,36 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData()
+
+    // Extract and validate data
     const name = formData.get("name") as string
-    const quantity = Number.parseInt(formData.get("quantity") as string)
-    const price = Number.parseFloat(formData.get("price") as string)
-    const lowStockThreshold = Number.parseInt(formData.get("lowStockThreshold") as string)
+    const quantityStr = formData.get("quantity") as string
+    const priceStr = formData.get("price") as string
+    const lowStockThresholdStr = formData.get("lowStockThreshold") as string
     const imageFile = formData.get("image") as File
+
+    // Convert string values to numbers
+    const quantity = Number.parseInt(quantityStr, 10)
+    const price = Number.parseFloat(priceStr)
+    const lowStockThreshold = Number.parseInt(lowStockThresholdStr, 10)
+
+    // Validate the data
+    try {
+      inventoryItemSchema.parse({
+        name,
+        quantity,
+        price,
+        lowStockThreshold,
+      })
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
+    }
 
     if (!imageFile) {
       return NextResponse.json({ error: "Image is required" }, { status: 400 })
@@ -77,15 +103,45 @@ export async function PUT(req: NextRequest) {
     }
 
     const formData = await req.formData()
+
+    // Extract data
     const _id = formData.get("_id") as string
     const name = formData.get("name") as string
-    const quantity = Number.parseInt(formData.get("quantity") as string)
-    const price = Number.parseFloat(formData.get("price") as string)
-    const lowStockThreshold = Number.parseInt(formData.get("lowStockThreshold") as string)
+    const quantityStr = formData.get("quantity") as string
+    const priceStr = formData.get("price") as string
+    const lowStockThresholdStr = formData.get("lowStockThreshold") as string
     const imageFile = formData.get("image") as File | null
+
+    // Convert string values to numbers
+    const quantity = Number.parseInt(quantityStr, 10)
+    const price = Number.parseFloat(priceStr)
+    const lowStockThreshold = Number.parseInt(lowStockThresholdStr, 10)
 
     if (!_id) {
       return NextResponse.json({ error: "Item ID is required" }, { status: 400 })
+    }
+
+    // Validate ObjectId
+    if (!ObjectId.isValid(_id)) {
+      return NextResponse.json({ error: "Invalid item ID format" }, { status: 400 })
+    }
+
+    // Validate the data
+    try {
+      inventoryItemSchema.parse({
+        name,
+        quantity,
+        price,
+        lowStockThreshold,
+      })
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
 
     const client = await clientPromise
@@ -131,28 +187,43 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { itemId, quantity } = await req.json()
+    const data = await req.json()
 
-    if (!itemId || !quantity || quantity <= 0) {
-      return NextResponse.json({ error: "Invalid restock data" }, { status: 400 })
+    // Validate input data
+    try {
+      restockSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { itemId, quantity } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    // Update the item quantity
-    const updateResult = await db
-      .collection("inventory")
-      .updateOne({ _id: new ObjectId(itemId), userId }, { $inc: { quantity: quantity } })
+    // Get the current item to record the previous quantity
+    const currentItem = await db.collection("inventory").findOne({ _id: new ObjectId(itemId), userId })
 
-    if (updateResult.matchedCount === 0) {
+    if (!currentItem) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 })
     }
 
-    // Add a restock record
+    // Update the item quantity
+    await db
+      .collection("inventory")
+      .updateOne({ _id: new ObjectId(itemId), userId }, { $inc: { quantity: quantity } })
+
+    // Add a restock record with previous quantity
     const restockRecord = {
       itemId: new ObjectId(itemId),
       quantity,
+      previousQuantity: currentItem.quantity,
       date: new Date(),
       userId: new ObjectId(userId),
     }
@@ -173,11 +244,22 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { itemId } = await req.json()
+    const data = await req.json()
 
-    if (!itemId) {
-      return NextResponse.json({ error: "Item ID is required" }, { status: 400 })
+    // Validate input data
+    try {
+      deleteItemSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { itemId } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")

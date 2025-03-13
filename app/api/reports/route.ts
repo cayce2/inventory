@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import * as XLSX from "xlsx"
 import { ObjectId } from "mongodb"
+import { reportPeriodSchema } from "@/lib/validations"
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,84 +13,110 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Parse URL to get query parameters
+    const url = new URL(req.url)
+    const period = url.searchParams.get("period")
+    const startDate = url.searchParams.get("startDate")
+    const endDate = url.searchParams.get("endDate")
+
+    // Validate parameters
+    if (!period && (!startDate || !endDate)) {
+      return NextResponse.json(
+        {
+          error: "Either period or both startDate and endDate must be provided",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (startDate && endDate) {
+      // Validate date formats
+      if (isNaN(Date.parse(startDate)) || isNaN(Date.parse(endDate))) {
+        return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
+      }
+    }
+
+    if (period && !["day", "week", "month", "quarter", "year", "all"].includes(period)) {
+      return NextResponse.json({ error: "Invalid period value" }, { status: 400 })
+    }
+
     const client = await clientPromise
     const db = client.db("inventory_management")
+
+    // Determine date range
+    const now = new Date()
+    let dateFilter: any = {}
+
+    if (startDate && endDate) {
+      // Custom date range
+      dateFilter = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate + "T23:59:59.999Z"), // Include the entire end date
+      }
+    } else if (period) {
+      // Predefined periods
+      switch (period) {
+        case "day":
+          dateFilter = { $gte: new Date(now.setHours(0, 0, 0, 0)) }
+          break
+        case "week":
+          const weekStart = new Date(now)
+          weekStart.setDate(now.getDate() - now.getDay()) // Start of week (Sunday)
+          weekStart.setHours(0, 0, 0, 0)
+          dateFilter = { $gte: weekStart }
+          break
+        case "month":
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          dateFilter = { $gte: monthStart }
+          break
+        case "quarter":
+          const quarterStart = new Date(now)
+          quarterStart.setMonth(now.getMonth() - 3)
+          dateFilter = { $gte: quarterStart }
+          break
+        case "year":
+          const yearStart = new Date(now.getFullYear(), 0, 1)
+          dateFilter = { $gte: yearStart }
+          break
+        default: // "all" or invalid period
+          dateFilter = {} // No date filter
+      }
+    }
 
     // Fetch all inventory items
     const inventory = await db.collection("inventory").find({ userId }).toArray()
 
-    // Calculate total income for different time periods
-    const now = new Date()
-    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    // Fetch invoices with date filter
+    const invoiceQuery: any = { userId }
+    if (Object.keys(dateFilter).length > 0) {
+      invoiceQuery.createdAt = dateFilter
+    }
+    const invoices = await db.collection("invoices").find(invoiceQuery).toArray()
 
-    const invoices = await db
-      .collection("invoices")
-      .find({
-        userId,
-        status: "paid",
-      })
-      .toArray()
+    // Calculate total income, unpaid invoice amount, and overdue invoices amount
+    let totalIncome = 0
+    let unpaidInvoiceAmount = 0
+    let overdueInvoiceAmount = 0
+    const unpaidInvoices = []
 
-    const totalIncome = {
-      day: invoices
-        .filter((invoice) => new Date(invoice.createdAt) >= dayAgo)
-        .reduce((sum, invoice) => sum + invoice.amount, 0),
-      week: invoices
-        .filter((invoice) => new Date(invoice.createdAt) >= weekAgo)
-        .reduce((sum, invoice) => sum + invoice.amount, 0),
-      month: invoices
-        .filter((invoice) => new Date(invoice.createdAt) >= monthAgo)
-        .reduce((sum, invoice) => sum + invoice.amount, 0),
-      allTime: invoices.reduce((sum, invoice) => sum + invoice.amount, 0),
+    for (const invoice of invoices) {
+      if (invoice.status === "paid") {
+        totalIncome += invoice.amount
+      } else {
+        unpaidInvoiceAmount += invoice.amount
+        unpaidInvoices.push(invoice)
+        if (new Date(invoice.dueDate) < now) {
+          overdueInvoiceAmount += invoice.amount
+        }
+      }
     }
 
-    // Fetch unpaid invoices with item details
-    const unpaidInvoices = await db
-      .collection("invoices")
-      .aggregate([
-        {
-          $match: {
-            userId: new ObjectId(userId),
-            status: "unpaid",
-          },
-        },
-        {
-          $lookup: {
-            from: "inventory",
-            localField: "items.itemId",
-            foreignField: "_id",
-            as: "itemDetails",
-          },
-        },
-      ])
-      .toArray()
-
-    // Fetch restock history with item details
-    const restockHistory = await db
-      .collection("restockHistory")
-      .aggregate([
-        {
-          $match: {
-            userId: new ObjectId(userId),
-          },
-        },
-        {
-          $lookup: {
-            from: "inventory",
-            localField: "itemId",
-            foreignField: "_id",
-            as: "itemDetails",
-          },
-        },
-        {
-          $addFields: {
-            itemName: { $arrayElemAt: ["$itemDetails.name", 0] },
-          },
-        },
-      ])
-      .toArray()
+    // Fetch restock history with date filter
+    const restockQuery: any = { userId }
+    if (Object.keys(dateFilter).length > 0) {
+      restockQuery.date = dateFilter
+    }
+    const restockHistory = await db.collection("restockHistory").find(restockQuery).toArray()
 
     // Create a worksheet for inventory
     const inventoryWs = XLSX.utils.json_to_sheet(
@@ -101,27 +129,25 @@ export async function GET(req: NextRequest) {
       })),
     )
 
-    // Create a worksheet for total income
-    const incomeWs = XLSX.utils.json_to_sheet([
-      { Period: "Day", Income: totalIncome.day },
-      { Period: "Week", Income: totalIncome.week },
-      { Period: "Month", Income: totalIncome.month },
-      { Period: "All Time", Income: totalIncome.allTime },
+    // Create a worksheet for financial summary
+    const financialSummaryWs = XLSX.utils.json_to_sheet([
+      { Metric: "Total Income", Amount: totalIncome },
+      { Metric: "Unpaid Invoice Amount", Amount: unpaidInvoiceAmount },
+      { Metric: "Overdue Invoice Amount", Amount: overdueInvoiceAmount },
     ])
 
     // Create a worksheet for unpaid invoices
     const unpaidInvoicesWs = XLSX.utils.json_to_sheet(
       unpaidInvoices.map((invoice) => ({
+        "Invoice Number": invoice.invoiceNumber,
         "Customer Name": invoice.customerName,
         "Customer Phone": invoice.customerPhone,
-        "Invoice Number": invoice.invoiceNumber,
         Amount: invoice.amount,
         "Due Date": new Date(invoice.dueDate).toLocaleDateString(),
+        Status: new Date(invoice.dueDate) < now ? "Overdue" : "Unpaid",
         Items: invoice.items
           .map((item: { itemId: ObjectId; quantity: number }) => {
-            const itemDetail = invoice.itemDetails.find(
-              (detail: { _id: ObjectId; name: string }) => detail._id.toString() === item.itemId.toString(),
-            )
+            const itemDetail = inventory.find((invItem) => invItem._id.toString() === item.itemId.toString())
             return `${itemDetail ? itemDetail.name : "Unknown"} (${item.quantity})`
           })
           .join(", "),
@@ -130,20 +156,23 @@ export async function GET(req: NextRequest) {
 
     // Create a worksheet for restock history
     const restockHistoryWs = XLSX.utils.json_to_sheet(
-      restockHistory.map((record) => ({
-        "Item Name": record.itemName || "Unknown",
-        "Restock Quantity": record.quantity,
-        "Restock Date": new Date(record.date).toLocaleDateString(),
-        "Previous Quantity": record.previousQuantity !== undefined ? record.previousQuantity : "N/A",
-        "New Quantity":
-          record.previousQuantity !== undefined ? record.previousQuantity + record.quantity : record.quantity,
-      })),
+      restockHistory.map((record) => {
+        const item = inventory.find((invItem) => invItem._id.toString() === record.itemId.toString())
+        return {
+          "Item Name": item ? item.name : "Unknown",
+          "Restock Quantity": record.quantity,
+          "Restock Date": new Date(record.date).toLocaleDateString(),
+          "Previous Quantity": record.previousQuantity !== undefined ? record.previousQuantity : "N/A",
+          "New Quantity":
+            record.previousQuantity !== undefined ? record.previousQuantity + record.quantity : record.quantity,
+        }
+      }),
     )
 
     // Create a workbook and add the worksheets
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, inventoryWs, "Inventory Report")
-    XLSX.utils.book_append_sheet(wb, incomeWs, "Total Income")
+    XLSX.utils.book_append_sheet(wb, financialSummaryWs, "Financial Summary")
     XLSX.utils.book_append_sheet(wb, unpaidInvoicesWs, "Unpaid Invoices")
     XLSX.utils.book_append_sheet(wb, restockHistoryWs, "Restock History")
 
@@ -172,85 +201,130 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { period } = await req.json()
+    const data = await req.json()
+
+    // Validate input data
+    try {
+      reportPeriodSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
+    }
+
+    const { period, customDateRange, startDate, endDate } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")
 
+    // Determine date range
     const now = new Date()
-    let startDate
+    let dateFilter: any = {}
 
-    switch (period) {
-      case "day":
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        break
-      case "week":
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-        break
-      case "month":
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-        break
-      case "all":
-        startDate = new Date(0) // Beginning of time
-        break
-      default:
-        return NextResponse.json({ error: "Invalid period" }, { status: 400 })
+    if (customDateRange && startDate && endDate) {
+      // Custom date range
+      dateFilter = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate + "T23:59:59.999Z"), // Include the entire end date
+      }
+    } else if (period) {
+      // Predefined periods
+      switch (period) {
+        case "day":
+          dateFilter = { $gte: new Date(now.setHours(0, 0, 0, 0)) }
+          break
+        case "week":
+          const weekStart = new Date(now)
+          weekStart.setDate(now.getDate() - now.getDay()) // Start of week (Sunday)
+          weekStart.setHours(0, 0, 0, 0)
+          dateFilter = { $gte: weekStart }
+          break
+        case "month":
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          dateFilter = { $gte: monthStart }
+          break
+        case "quarter":
+          const quarterStart = new Date(now)
+          quarterStart.setMonth(now.getMonth() - 3)
+          dateFilter = { $gte: quarterStart }
+          break
+        case "year":
+          const yearStart = new Date(now.getFullYear(), 0, 1)
+          dateFilter = { $gte: yearStart }
+          break
+        default: // "all" or invalid period
+          dateFilter = {} // No date filter
+      }
     }
 
-    const totalIncome = await db
-      .collection("invoices")
-      .aggregate([
-        {
-          $match: {
-            userId: new ObjectId(userId),
-            status: "paid",
-            createdAt: { $gte: startDate },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$amount" },
-          },
-        },
-      ])
+    // Fetch invoices with date filter
+    const invoiceQuery: any = { userId }
+    if (Object.keys(dateFilter).length > 0) {
+      invoiceQuery.createdAt = dateFilter
+    }
+    const invoices = await db.collection("invoices").find(invoiceQuery).toArray()
+
+    // Calculate total income, unpaid invoice amount, and overdue invoices amount
+    let totalIncome = 0
+    let unpaidInvoiceAmount = 0
+    let overdueInvoiceAmount = 0
+    const unpaidInvoices = []
+
+    for (const invoice of invoices) {
+      if (invoice.status === "paid") {
+        totalIncome += invoice.amount
+      } else {
+        unpaidInvoiceAmount += invoice.amount
+        unpaidInvoices.push(invoice)
+        if (new Date(invoice.dueDate) < now) {
+          overdueInvoiceAmount += invoice.amount
+        }
+      }
+    }
+
+    // Fetch restock history with date filter
+    const restockQuery: any = { userId }
+    if (Object.keys(dateFilter).length > 0) {
+      restockQuery.date = dateFilter
+    }
+    const restockHistory = await db.collection("restockHistory").find(restockQuery).toArray()
+
+    // Fetch item details for unpaid invoices and restock history
+    const itemIds = new Set([
+      ...unpaidInvoices.flatMap((invoice) => invoice.items.map((item: { itemId: ObjectId }) => item.itemId)),
+      ...restockHistory.map((record) => record.itemId),
+    ])
+    const items = await db
+      .collection("inventory")
+      .find({ _id: { $in: Array.from(itemIds).map((id) => new ObjectId(id)) } })
       .toArray()
 
-    const unpaidInvoices = await db
-      .collection("invoices")
-      .aggregate([
-        {
-          $match: {
-            userId: new ObjectId(userId),
-            status: "unpaid",
-          },
-        },
-        {
-          $lookup: {
-            from: "inventory",
-            localField: "items.itemId",
-            foreignField: "_id",
-            as: "itemDetails",
-          },
-        },
-      ])
-      .toArray()
+    const itemMap = new Map(items.map((item) => [item._id.toString(), item]))
+
+    const unpaidInvoicesWithItems = unpaidInvoices.map((invoice) => ({
+      ...invoice,
+      items: invoice.items.map((item: { itemId: ObjectId; quantity: number }) => ({
+        ...item,
+        name: itemMap.get(item.itemId.toString())?.name || "Unknown",
+      })),
+    }))
+
+    const restockHistoryWithItems = restockHistory.map((record) => ({
+      ...record,
+      itemName: itemMap.get(record.itemId.toString())?.name || "Unknown",
+    }))
 
     return NextResponse.json(
       {
-        totalIncome: totalIncome[0]?.total || 0,
-        unpaidInvoices: unpaidInvoices.map((invoice) => ({
-          ...invoice,
-          items: invoice.items.map((item: { itemId: ObjectId; quantity: number }) => {
-            const itemDetail = invoice.itemDetails.find(
-              (detail: { _id: ObjectId; name: string }) => detail._id.toString() === item.itemId.toString(),
-            )
-            return {
-              ...item,
-              name: itemDetail ? itemDetail.name : "Unknown",
-            }
-          }),
-        })),
+        totalIncome,
+        unpaidInvoiceAmount,
+        overdueInvoiceAmount,
+        unpaidInvoices: unpaidInvoicesWithItems,
+        restockHistory: restockHistoryWithItems,
       },
       { status: 200 },
     )

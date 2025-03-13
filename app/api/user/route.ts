@@ -1,15 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
-import { z } from "zod"
-
-// Define validation schema
-const userUpdateSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email format"),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"),
-})
+import { userUpdateSchema } from "@/lib/validations"
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,16 +40,14 @@ export async function PUT(req: NextRequest) {
     // Validate input data
     try {
       userUpdateSchema.parse(data)
-    } catch (validationError) {
-      if (validationError instanceof z.ZodError) {
-        return NextResponse.json(
-          {
-            error: "Validation failed",
-            details: validationError.errors,
-          },
-          { status: 400 },
-        )
-      }
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
 
     const { name, email, phone } = data

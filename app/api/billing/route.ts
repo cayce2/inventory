@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
+import { invoiceSchema, invoiceActionSchema } from "@/lib/validations"
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,7 +33,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { invoiceNumber, customerName, customerPhone, amount, dueDate, items } = await req.json()
+    const data = await req.json()
+
+    // Validate input data
+    try {
+      invoiceSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
+    }
+
+    const { invoiceNumber, customerName, customerPhone, amount, dueDate, items } = data
     const client = await clientPromise
     const db = client.db("inventory_management")
 
@@ -85,11 +101,22 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { invoiceId, action } = await req.json()
+    const data = await req.json()
 
-    if (!invoiceId || !action) {
-      return NextResponse.json({ error: "Invoice ID and action are required" }, { status: 400 })
+    // Validate input data
+    try {
+      invoiceActionSchema.parse(data)
+    } catch (validationError: any) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationError.errors || validationError.message,
+        },
+        { status: 400 },
+      )
     }
+
+    const { invoiceId, action } = data
 
     const client = await clientPromise
     const db = client.db("inventory_management")
