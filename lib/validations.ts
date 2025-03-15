@@ -72,23 +72,35 @@ export const deleteItemSchema = z.object({
 
 // Billing schemas
 export const invoiceItemSchema = z.object({
-  itemId: objectIdSchema,
+  itemId: z.string().refine((val) => isValidObjectId(val), {
+    message: "Invalid item ID format",
+  }),
   quantity: z.number().int().positive("Quantity must be a positive integer"),
 })
 
-export const invoiceSchema = z.object({
-  invoiceNumber: z.string().min(1, "Invoice number is required"),
-  customerName: z.string().min(1, "Customer name is required"),
-  customerPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"),
-  amount: z.number().nonnegative("Amount must be a non-negative number"),
-  dueDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: "Invalid date format",
-  }),
-  items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
-})
+export const invoiceSchema = z
+  .object({
+    invoiceNumber: z.string().min(1, "Invoice number is required"),
+    customerName: z.string().min(1, "Customer name is required"),
+    customerPhone: z.string().optional().default(""),
+    amount: z.number().nonnegative("Amount must be a non-negative number").optional(),
+    dueDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
+      message: "Invalid date format",
+    }),
+    items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
+  })
+  .transform((data) => {
+    // If phone number doesn't match the pattern, provide a default format
+    if (data.customerPhone && !/^\+?[1-9]\d{1,14}$/.test(data.customerPhone)) {
+      data.customerPhone = "+1" + data.customerPhone.replace(/\D/g, "")
+    }
+    return data
+  })
 
 export const invoiceActionSchema = z.object({
-  invoiceId: objectIdSchema,
+  invoiceId: z.string().refine((val) => ObjectId.isValid(val), {
+    message: "Invalid invoice ID format",
+  }),
   action: z.enum(["markPaid", "markUnpaid", "delete", "restore"]),
 })
 

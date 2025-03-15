@@ -163,7 +163,7 @@ export default function Reports() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-500">Total Income</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">${totalIncome.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-slate-800 mt-1">KES {totalIncome.toFixed(2)}</p>
                 </div>
                 <div className="bg-emerald-100 p-2 rounded-lg">
                   <DollarSign className="text-emerald-500" size={24} />
@@ -175,7 +175,7 @@ export default function Reports() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-500">Unpaid Invoices</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">${unpaidInvoiceAmount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-slate-800 mt-1">KES {unpaidInvoiceAmount.toFixed(2)}</p>
                 </div>
                 <div className="bg-amber-100 p-2 rounded-lg">
                   <Clock className="text-amber-500" size={24} />
@@ -187,7 +187,7 @@ export default function Reports() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-500">Overdue Invoices</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">${overdueInvoiceAmount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-slate-800 mt-1">KES {overdueInvoiceAmount.toFixed(2)}</p>
                 </div>
                 <div className="bg-rose-100 p-2 rounded-lg">
                   <AlertTriangle className="text-rose-500" size={24} />
@@ -354,7 +354,7 @@ export default function Reports() {
                           <td className="px-6 py-4 font-medium">{invoice.invoiceNumber}</td>
                           <td className="px-6 py-4">{invoice.customerName}</td>
                           <td className="px-6 py-4">{invoice.customerPhone}</td>
-                          <td className="px-6 py-4 font-medium">${invoice.amount.toFixed(2)}</td>
+                          <td className="px-6 py-4 font-medium">KES {invoice.amount.toFixed(2)}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${
                               isOverdue ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'

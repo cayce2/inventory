@@ -21,12 +21,49 @@ interface Invoice {
   status: "paid" | "unpaid"
 }
 
+interface Payment {
+  date: string
+  amount: number
+}
+
 interface PrintProps {
   invoice: Invoice
   inventory: InventoryItem[]
   items: { name: string; price: number; quantity: number }[];
+  payments: Payment[];
+}
+
+
+interface Customer {
+  name: string
+  phone: string
+}
+
+interface PrintProps {
+
+  invoiceNumber: string
+
+  customerName: string
+
+  customerPhone: string
+
+  items: Array<{ name: string; price: number; quantity: number }>
+
+  amount: number
+
+  dueDate: string
+
+  status: "paid" | "unpaid"
+
+  customer: Customer;
+
+  payments: Payment[];
 
 }
+
+
+
+
 
 const Print: React.FC<PrintProps> = ({ invoice, inventory }) => {
   // Map items in invoice to their corresponding inventory details

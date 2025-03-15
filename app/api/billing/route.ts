@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest,NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
     try {
       invoiceSchema.parse(data)
     } catch (validationError: any) {
+      console.error("Invoice validation error:", JSON.stringify(validationError, null, 2))
+      console.error("Received data:", JSON.stringify(data, null, 2))
       return NextResponse.json(
         {
           error: "Validation failed",
@@ -48,7 +50,31 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { invoiceNumber, customerName, customerPhone, amount, dueDate, items } = data
+    const { invoiceNumber, customerName, customerPhone = "", dueDate, items } = data
+    let { amount } = data
+
+    // If amount is not provided, calculate it from the items
+    if (amount === undefined || amount === 0) {
+      const client = await clientPromise
+      const db = client.db("inventory_management")
+
+      // Fetch all items to calculate the total amount
+      const itemIds = items.map((item: { itemId: string }) => new ObjectId(item.itemId))
+      const inventoryItems = await db
+        .collection("inventory")
+        .find({ _id: { $in: itemIds } })
+        .toArray()
+
+      // Create a map for quick lookup
+      const itemMap = new Map(inventoryItems.map((item) => [item._id.toString(), item]))
+
+      // Calculate the total amount
+      amount = items.reduce((total: number, item: { itemId: string; quantity: number }) => {
+        const inventoryItem = itemMap.get(item.itemId)
+        return total + (inventoryItem ? inventoryItem.price * item.quantity : 0)
+      }, 0)
+    }
+
     const client = await clientPromise
     const db = client.db("inventory_management")
 
@@ -94,7 +120,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function PUT(req: NextRequest) {
+export async function PUT(req:NextRequest) {
   try {
     const userId = await authMiddleware(req)
     if (!userId) {
