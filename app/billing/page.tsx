@@ -619,12 +619,19 @@ export default function Billing() {
                       <div className="flex gap-2">
                         <Input
                           type="number"
-                          value={selectedQuantity}
-                          onChange={(e) =>
-                            setSelectedQuantity(Math.max(1, Number(e.target.value)))
-                          }
+                          placeholder="1"
+                          value={selectedQuantity === 1 ? "" : selectedQuantity}
+                          onChange={(e) => {
+                          const value = e.target.value.trim();
+                            if (value === "") {
+                              setSelectedQuantity(1); // Use 1 internally but show empty field
+                            } else {
+                              setSelectedQuantity(Math.max(1, Number(value)));
+                            }
+                          }}
                           min="1"
                           className="w-24"
+                          required
                         />
                         <Button
                           type="button"
