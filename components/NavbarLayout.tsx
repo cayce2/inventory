@@ -19,6 +19,8 @@ import {
   X
 } from "lucide-react"
 import axios from "axios"
+import Image from "next/image"
+
 
 export default function NavbarLayout({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -183,7 +185,15 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
             {/* Logo and Brand */}
             <div className="flex items-center">
               <Link href="/dashboard" className="flex items-center">
-                <span className="bg-blue-600 text-white p-2 rounded mr-2">IM</span>
+              <div className="flex justify-center mb-2">
+              <Image 
+                src="/favicon.ico" 
+                alt="Logo" 
+                width={60} 
+                height={60} 
+                className="text-pink-600" 
+              />
+            </div>
                 <span className="text-xl font-bold text-gray-900">Inventory Manager</span>
               </Link>
             </div>

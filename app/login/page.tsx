@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import NavbarLayout from "@/components/NavbarLayout"
 import Link from "next/link"
+import Image from "next/image"
+
 
 // Create a separate component to handle the search params logic
 function LoginForm() {
@@ -260,6 +262,15 @@ export default function Login() {
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col justify-center items-center p-4">
         <div className="w-full max-w-md space-y-4">
           <div className="text-center space-y-2">
+              <div className="flex justify-center mb-2">
+                  <Image 
+                      src="/favicon.ico" 
+                      alt="Logo" 
+                      width={60} 
+                      height={60} 
+                      className="text-pink-600" 
+                  />
+                </div>
             <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
             <p className="text-gray-500">Sign in to your account to continue</p>
           </div>

@@ -552,17 +552,17 @@ export default function InvoiceDetailPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Subtotal:</span>
-                        <span className="font-medium">${invoice.amount.toFixed(2)}</span>
+                        <span className="font-medium">KES {invoice.amount.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Total Paid:</span>
-                        <span className="font-medium text-green-600">${calculateTotalPaid().toFixed(2)}</span>
+                        <span className="font-medium text-green-600">KES {calculateTotalPaid().toFixed(2)}</span>
                       </div>
                       <div className="border-t border-gray-100 my-2 pt-2"></div>
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-900">Amount Due:</span>
                         <span className={`font-bold ${calculateAmountDue() > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          ${calculateAmountDue().toFixed(2)}
+                          KES {calculateAmountDue().toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -598,10 +598,10 @@ export default function InvoiceDetailPage() {
                             <td className="px-6 py-4 text-sm text-gray-900">{item.name}</td>
                             <td className="px-6 py-4 text-sm text-gray-600 text-center">{item.quantity}</td>
                             <td className="px-6 py-4 text-sm text-gray-600 text-right">
-                              ${item.price.toFixed(2)}
+                              KES {item.price.toFixed(2)}
                             </td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                              ${item.subtotal.toFixed(2)}
+                              KES {item.subtotal.toFixed(2)}
                             </td>
                           </tr>
                         ))}
@@ -612,7 +612,7 @@ export default function InvoiceDetailPage() {
                             Total:
                           </td>
                           <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">
-                            ${invoice.amount.toFixed(2)}
+                            KES {invoice.amount.toFixed(2)}
                           </td>
                         </tr>
                       </tfoot>
@@ -690,7 +690,7 @@ export default function InvoiceDetailPage() {
                                 </label>
                                 <div className="relative rounded-md shadow-sm">
                                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span className="text-gray-500 sm:text-sm">$</span>
+                                    <span className="text-gray-500 sm:text-sm">KES </span>
                                   </div>
                                   <input
                                     type="number"
