@@ -18,7 +18,7 @@ import {
   CreditCard,
   Filter,
   ChevronDown,
-  Search
+  Search,
 } from "lucide-react"
 import Print from "@/components/Print"
 import { motion, AnimatePresence } from "framer-motion"
@@ -70,6 +70,7 @@ export default function Billing() {
   const printRef = useRef<HTMLDivElement>(null)
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+  const [showPrintModal, setShowPrintModal] = useState(false)
   
 
   useEffect(() => {
@@ -255,31 +256,44 @@ export default function Billing() {
 
   const handlePrint = (invoice: Invoice) => {
     setPrintingInvoice(invoice)
-    setTimeout(() => {
-      if (printRef.current) {
-        const content = printRef.current
-        const printWindow = window.open("", "_blank")
-        if (printWindow) {
-          printWindow.document.write("<html><head><title>Print Invoice</title>")
-          printWindow.document.write("<style>")
-          printWindow.document.write(`
-            body { font-family: 'Inter', sans-serif; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #e5e7eb; padding: 12px; }
-            th { background-color: #f9fafb; }
-            .header { margin-bottom: 24px; }
-            .footer { margin-top: 24px; font-size: 14px; }
-          `)
-          printWindow.document.write("</style></head><body>")
-          printWindow.document.write(content.innerHTML)
-          printWindow.document.write("</body></html>")
-          printWindow.document.close()
-          printWindow.print()
-        }
-      }
-      setPrintingInvoice(null)
-    }, 100)
+    setShowPrintModal(true)
   }
+
+  const handlePrintDocument = () => {
+    if (printRef.current) {
+      // Create a style element for print-specific styling
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printSection, #printSection * {
+            visibility: visible;
+          }
+          #printSection {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+        }
+      `;
+      
+      // Add an ID to the print reference for targeting in CSS
+      printRef.current.id = 'printSection';
+      
+      // Append style to head
+      document.head.appendChild(style);
+      
+      // Trigger print
+      window.print();
+      
+      // Clean up
+      document.head.removeChild(style);
+      setShowPrintModal(false);
+    }
+  };
 
   const getFilteredInvoices = () => {
     return invoices.filter((invoice) => {
@@ -605,8 +619,8 @@ export default function Billing() {
                             type="text"
                             id="invoiceNumber"
                             value={newInvoice.invoiceNumber}
-                            onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 cursor-not-allowed"
                             required
                           />
                         </div>
@@ -679,7 +693,7 @@ export default function Billing() {
                               type="button"
                               onClick={handleAddItem}
                               disabled={!selectedItem || selectedQuantity < 1}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
                             >
                               Add
                             </button>
@@ -688,29 +702,30 @@ export default function Billing() {
                       </div>
 
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Invoice Items</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Items</h4>
                         {newInvoice.items.length === 0 ? (
                           <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
-                            <p className="text-gray-500">No items added yet. Add items from the inventory above.</p>
+                            <p className="text-gray-500">No items added to this invoice</p>
+                            <p className="text-sm text-gray-400">Select items from the inventory above</p>
                           </div>
                         ) : (
-                          <div className="overflow-x-auto border border-gray-200 rounded-md">
-                            <table className="min-w-full">
-                              <thead>
-                                <tr className="bg-gray-50 border-b border-gray-200">
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <div className="border border-gray-200 rounded-md overflow-hidden">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Item
                                   </th>
-                                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Price (KES)
+                                  </th>
+                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Quantity
                                   </th>
-                                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Unit Price
+                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Subtotal
                                   </th>
-                                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Total
-                                  </th>
-                                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Action
                                   </th>
                                 </tr>
@@ -719,33 +734,34 @@ export default function Billing() {
                                 {newInvoice.items.map((item, index) => {
                                   const inventoryItem = inventory.find((i) => i._id === item.itemId);
                                   const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0;
+                                  const subtotal = price * item.quantity;
                                   
                                   return (
                                     <tr key={index}>
-                                      <td className="px-4 py-3 text-sm text-gray-900">
-                                        {inventoryItem ? inventoryItem.name : "Unknown Item"}
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {inventoryItem?.name || "Unknown Item"}
                                       </td>
-                                      <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                        {item.quantity}
-                                      </td>
-                                      <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                                         <input
                                           type="number"
                                           value={price}
                                           onChange={(e) => handlePriceAdjustment(index, Number(e.target.value))}
                                           min="0"
                                           step="0.01"
-                                          className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-right"
                                         />
                                       </td>
-                                      <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">
-                                        KES {(price * item.quantity).toFixed(2)}
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                        {item.quantity}
                                       </td>
-                                      <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                                        {subtotal.toFixed(2)}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button
                                           type="button"
                                           onClick={() => handleRemoveItem(index)}
-                                          className="text-red-600 hover:text-red-800 transition-colors"
+                                          className="text-red-600 hover:text-red-800"
                                         >
                                           <Trash2 size={16} />
                                         </button>
@@ -754,11 +770,11 @@ export default function Billing() {
                                   );
                                 })}
                                 <tr className="bg-gray-50">
-                                  <td colSpan={3} className="px-4 py-3 text-sm font-medium text-gray-900 text-right">
+                                  <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                                     Total Amount:
                                   </td>
-                                  <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                                    KES {newInvoice.amount.toFixed(2)}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
+                                    {newInvoice.amount.toFixed(2)}
                                   </td>
                                   <td></td>
                                 </tr>
@@ -768,23 +784,31 @@ export default function Billing() {
                         )}
                       </div>
 
-                      <div className="flex justify-end pt-4 border-t border-gray-200">
-                        <div className="flex space-x-3">
-                          <button
-                            type="button"
-                            onClick={() => setIsCreatingInvoice(false)}
-                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            disabled={isLoading || newInvoice.items.length === 0}
-                          >
-                            {isLoading ? "Creating..." : "Create Invoice"}
-                          </button>
-                        </div>
+                      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => setIsCreatingInvoice(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isLoading || newInvoice.items.length === 0}
+                          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isLoading ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Saving...
+                            </span>
+                          ) : (
+                            "Create Invoice"
+                          )}
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -794,16 +818,47 @@ export default function Billing() {
           )}
         </AnimatePresence>
 
-        {/* Print Preview (Hidden) */}
-        <div className="hidden">
-          <div ref={printRef}>
-            {printingInvoice && (
-              <Print 
-                invoice={printingInvoice}
-                inventory={inventory} invoiceNumber={""} invoiceItems={[]} payments={[]} customer={null} amountDue={0} amount={0} dueDate={""} status={"paid"}              />
-            )}
-          </div>
-        </div>
+        {/* Print Modal */}
+        <AnimatePresence>
+          {showPrintModal && printingInvoice && (
+            <>
+              <div className="fixed inset-0 bg-black bg-opacity-25 backdrop-blur-sm z-30" onClick={() => setShowPrintModal(false)}></div>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="fixed inset-0 overflow-y-auto z-40 flex items-center justify-center p-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-medium text-gray-900">Print Invoice</h3>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={handlePrintDocument}
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <Printer className="mr-1.5" size={16} />
+                        Print
+                      </button>
+                      <button
+                        onClick={() => setShowPrintModal(false)}
+                        className="text-gray-400 hover:text-gray-500 transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto p-6 max-h-[calc(90vh-60px)]">
+                    <div ref={printRef} className="p-8 bg-white">
+                      <Print invoice={printingInvoice} inventory={inventory} invoiceNumber={""} invoiceItems={[]} payments={[]} customer={null} amountDue={0} amount={0} dueDate={""} status={"paid"} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </NavbarLayout>
   );

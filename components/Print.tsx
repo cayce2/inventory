@@ -37,18 +37,16 @@ interface Customer {
 }
 
 interface PrintProps {
-  invoiceNumber: string;
   invoice: Invoice;
-  invoiceItems: { name: string; price: number; quantity: number }[];
+  invoiceItems?: { name: string; price: number; quantity: number }[];
   inventory: InventoryItem[];
   payments: Payment[];
-  customer: Customer | null;
-  amountDue: number;
-  amount: number;
-  dueDate: string;
-  status: "paid" | "unpaid";
-  
-
+  customer?: Customer | null;
+  amountDue?: number;
+  amount?: number;
+  dueDate?: string;
+  status?: "paid" | "unpaid";
+  invoiceNumber?: string;
 }
 
 const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) => {
@@ -67,103 +65,129 @@ const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) =>
   const remainingBalance = invoice.amount - totalPaid;
   const formattedDueDate = format(new Date(invoice.dueDate), "MMM d, yyyy");
   const today = format(new Date(), "MMM d, yyyy");
+  
+  const isOverdue = new Date(invoice.dueDate) < new Date() && invoice.status === "unpaid";
 
   return (
-    <Card className="max-w-3xl mx-auto shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800">
-        <div className="flex justify-between items-center">
+    <Card className="max-w-3xl mx-auto shadow-lg border-0 rounded-xl overflow-hidden">
+      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <CardTitle className="text-3xl font-bold text-blue-700 dark:text-blue-300">Invoice</CardTitle>
-            <p className="text-sm text-blue-600 dark:text-blue-400">#{invoice.invoiceNumber}</p>
+            <CardTitle className="text-3xl font-bold">Invoice</CardTitle>
+            <p className="text-blue-100 mt-1">#{invoice.invoiceNumber}</p>
           </div>
           <Badge 
-            className={`px-3 py-1 text-sm ${
+            className={`px-4 py-2 text-sm font-medium rounded-full ${
               invoice.status === "paid" 
-                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" 
-                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                ? "bg-emerald-100 text-emerald-800" 
+                : isOverdue
+                  ? "bg-rose-100 text-rose-800"
+                  : "bg-amber-100 text-amber-800"
             }`}
           >
-            {invoice.status === "paid" ? "PAID" : "UNPAID"}
+            {invoice.status === "paid" ? "PAID" : isOverdue ? "OVERDUE" : "PENDING"}
           </Badge>
         </div>
       </CardHeader>
       
-      <CardContent className="pt-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bill To:</h3>
-            <p className="font-medium">{invoice.customerName}</p>
-            <p className="text-gray-600 dark:text-gray-300">{invoice.customerPhone}</p>
+      <CardContent className="pt-8 px-6 md:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Bill To</h3>
+            <p className="font-semibold text-xl">{invoice.customerName}</p>
+            <p className="text-gray-600">{invoice.customerPhone}</p>
           </div>
           
-          <div className="space-y-2 md:text-right">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Invoice Details:</h3>
-            <p className="font-medium">Issue Date: <span className="text-gray-600 dark:text-gray-300">{today}</span></p>
-            <p className="font-medium">Due Date: <span className="text-gray-600 dark:text-gray-300">{formattedDueDate}</span></p>
+          <div className="space-y-3 md:text-right">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Invoice Details</h3>
+            <div className="flex justify-between md:justify-end items-center gap-2">
+              <span className="text-gray-600 md:hidden">Issue Date:</span>
+              <p className="font-medium">
+                <span className="hidden md:inline text-gray-600 mr-2">Issue Date:</span>
+                {today}
+              </p>
+            </div>
+            <div className="flex justify-between md:justify-end items-center gap-2">
+              <span className="text-gray-600 md:hidden">Due Date:</span>
+              <p className="font-medium">
+                <span className="hidden md:inline text-gray-600 mr-2">Due Date:</span>
+                <span className={isOverdue ? "text-rose-600 font-semibold" : ""}>{formattedDueDate}</span>
+              </p>
+            </div>
           </div>
         </div>
         
-        <Separator className="my-6" />
+        <Separator className="my-8" />
         
-        <div className="mb-6">
+        <div className="mb-8 overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 dark:bg-gray-800">
-                <TableHead className="w-1/2">Item</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+              <TableRow className="bg-gray-50">
+                <TableHead className="w-full md:w-1/2 py-3">Item</TableHead>
+                <TableHead className="text-right py-3">Qty</TableHead>
+                <TableHead className="text-right py-3">Price</TableHead>
+                <TableHead className="text-right py-3">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {invoiceItems.map((item, index) => (
-                <TableRow key={index} className="border-b border-gray-100 dark:border-gray-700">
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="text-right">{item.quantity}</TableCell>
-                  <TableCell className="text-right">${item.price.toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-medium">${item.total.toFixed(2)}</TableCell>
+                <TableRow key={index} className="border-b border-gray-100">
+                  <TableCell className="font-medium py-4">{item.name}</TableCell>
+                  <TableCell className="text-right py-4">{item.quantity}</TableCell>
+                  <TableCell className="text-right py-4">KES {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right font-medium py-4">KES {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
 
-        <div className="flex flex-col space-y-3 md:space-y-0 md:flex-row md:justify-between md:items-start">
+        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:justify-between md:items-start">
           {payments.length > 0 && (
             <div className="md:w-1/2">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Payment History:</h3>
-              <div className="space-y-1">
+              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Payment History</h3>
+              <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
                 {payments.map((payment, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{format(new Date(payment.date), "MMM d, yyyy")}</span>
-                    <span className="font-medium">${payment.amount.toFixed(2)}</span>
+                  <div key={index} className="flex justify-between items-center">
+                    <span className="text-gray-600">{format(new Date(payment.date), "MMM d, yyyy")}</span>
+                    <span className="font-medium text-emerald-600">KES {payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
           
-          <div className="md:w-1/2 md:pl-4 md:ml-auto">
-            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600 dark:text-gray-300">Subtotal:</span>
-                <span>${invoice.amount.toFixed(2)}</span>
+          <div className={`${payments.length > 0 ? 'md:w-2/5' : 'md:w-full md:max-w-xs md:ml-auto'}`}>
+            <div className="bg-gray-50 p-5 rounded-lg shadow-sm">
+              <div className="flex justify-between mb-3">
+                <span className="text-gray-600">Subtotal:</span>
+                <span className="font-medium">KES {invoice.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               {payments.length > 0 && (
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-600 dark:text-gray-300">Amount Paid:</span>
-                  <span className="text-green-600 dark:text-green-400">-${totalPaid.toFixed(2)}</span>
+                <div className="flex justify-between mb-3">
+                  <span className="text-gray-600">Amount Paid:</span>
+                  <span className="text-emerald-600 font-medium">-KES {totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               )}
-              <Separator className="my-2" />
-              <div className="flex justify-between font-bold">
+              <Separator className="my-3" />
+              <div className="flex justify-between font-bold text-lg mt-2">
                 <span>{invoice.status === "paid" ? "Total Paid:" : "Balance Due:"}</span>
-                <span className={invoice.status === "paid" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                  ${(invoice.status === "paid" ? invoice.amount : remainingBalance).toFixed(2)}
+                <span className={invoice.status === "paid" ? "text-emerald-600" : "text-rose-600"}>
+                  KES {(invoice.status === "paid" ? invoice.amount : remainingBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
+            
+            {invoice.status === "unpaid" && (
+              <div className="mt-4 text-center md:text-right">
+                <p className="text-sm text-gray-500">Please make payment by {formattedDueDate}</p>
+              </div>
+            )}
           </div>
+        </div>
+        
+        <div className="mt-12 pt-6 border-t border-gray-100 text-center text-gray-500 text-sm">
+          <p>Thank you for your business!</p>
         </div>
       </CardContent>
     </Card>
