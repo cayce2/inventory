@@ -1,31 +1,19 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import axios from "axios"
 import Link from "next/link"
 import NavbarLayout from "@/components/NavbarLayout"
 import Print from "@/components/Print"
 import { 
-  ArrowLeft, 
-  Save, 
-  Loader2, 
-  Printer, 
-  CheckCircle, 
-  XCircle, 
-  CreditCard, 
-  Trash2, 
-  RefreshCcw, 
-  Calendar, 
-  User, 
-  Phone, 
-  Mail, 
-  Home, 
-  FileText,
-  AlertCircle
+  ArrowLeft, Save, RefreshCw, Printer, 
+  CheckCircle, XCircle, CreditCard, 
+  Trash2, RotateCcw, PlusCircle, 
+  FileText, AlertTriangle, Calendar
 } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
 
 // Types
 interface InvoiceItem {
@@ -33,6 +21,7 @@ interface InvoiceItem {
   quantity: number
   name: string
   price: number
+  adjustedPrice?: number
   subtotal: number
 }
 
@@ -68,90 +57,87 @@ interface Payment {
   notes?: string
 }
 
-// Component for the payment method badge
-const PaymentMethodBadge = ({ method }: { method: string }) => {
-  const getMethodColor = (method: string) => {
-    switch (method.toLowerCase()) {
-      case 'cash': return 'bg-emerald-100 text-emerald-800'
-      case 'card': return 'bg-indigo-100 text-indigo-800'
-      case 'bank': return 'bg-blue-100 text-blue-800'
-      case 'mobile': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+// Component-specific interfaces
+interface StatusBadgeProps {
+  status: "paid" | "unpaid" | "deleted"
+}
 
-  const getMethodIcon = (method: string) => {
-    switch (method.toLowerCase()) {
-      case 'cash': return '💵'
-      case 'card': return '💳'
-      case 'bank': return '🏦'
-      case 'mobile': return '📱'
-      default: return '💲'
+interface InfoCardProps {
+  title: string
+  children: React.ReactNode
+}
+
+interface ActionButtonProps {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  variant: "primary" | "success" | "warning" | "danger" | "info"
+  disabled?: boolean
+  isLoading?: boolean
+}
+
+// Status Badge Component
+const StatusBadge = ({ status }: StatusBadgeProps) => {
+  const getStatusStyles = () => {
+    switch (status) {
+      case "paid":
+        return "bg-emerald-100 text-emerald-800 border border-emerald-200"
+      case "unpaid":
+        return "bg-amber-100 text-amber-800 border border-amber-200"
+      case "deleted":
+        return "bg-slate-100 text-slate-800 border border-slate-200"
+      default:
+        return "bg-gray-100 text-gray-800 border border-gray-200"
     }
   }
 
   return (
-    <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getMethodColor(method)}`}>
-      <span>{getMethodIcon(method)}</span>
-      <span>{method.charAt(0).toUpperCase() + method.slice(1)}</span>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusStyles()}`}>
+      {status?.toUpperCase()}
     </span>
   )
 }
 
-// Component for the status badge
-const StatusBadge = ({ status, deleted }: { status: string, deleted?: boolean }) => {
-  if (deleted) {
-    return (
-      <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-        <Trash2 size={12} />
-        DELETED
-      </span>
-    )
-  }
-  
-  if (status === "paid") {
-    return (
-      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-        <CheckCircle size={12} />
-        PAID
-      </span>
-    )
-  }
-  
+// Info Card Component
+const InfoCard = ({ title, children }: InfoCardProps) => {
   return (
-    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-      <AlertCircle size={12} />
-      UNPAID
-    </span>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <h2 className="text-lg font-semibold mb-4 text-gray-800">{title}</h2>
+      {children}
+    </div>
   )
 }
 
-// Alert notification component
-const Alert = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose()
-    }, 5000)
-    
-    return () => clearTimeout(timer)
-  }, [onClose])
-  
+// Action Button Component
+const ActionButton = ({ icon, label, onClick, variant, disabled, isLoading }: ActionButtonProps) => {
+  const getVariantStyles = () => {
+    switch (variant) {
+      case "primary":
+        return "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+      case "success":
+        return "bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
+      case "warning":
+        return "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
+      case "danger":
+        return "bg-rose-600 hover:bg-rose-700 focus:ring-rose-500"
+      case "info":
+        return "bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500"
+      default:
+        return "bg-gray-600 hover:bg-gray-700 focus:ring-gray-500"
+    }
+  }
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className={`fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg max-w-md flex items-center gap-3
-        ${type === 'success' ? 'bg-green-100 text-green-800 border-l-4 border-green-500' : 
-                             'bg-red-100 text-red-800 border-l-4 border-red-500'}`}
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className={`w-full text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center 
+      ${getVariantStyles()} transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2
+      disabled:opacity-60 disabled:cursor-not-allowed`}
     >
-      {type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
-      <p className="flex-1">{message}</p>
-      <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-        <XCircle size={16} />
-      </button>
-    </motion.div>
+      {isLoading ? <RefreshCw className="animate-spin h-4 w-4 mr-2" /> : icon}
+      <span className="ml-2">{isLoading ? "Processing..." : label}</span>
+    </button>
   )
 }
 
@@ -172,6 +158,7 @@ export default function InvoiceDetailPage() {
   const [paymentAmount, setPaymentAmount] = useState<number>(0)
   const [paymentMethod, setPaymentMethod] = useState("cash")
   const [paymentNotes, setPaymentNotes] = useState("")
+  const [activeTab, setActiveTab] = useState<"details" | "payments">("details")
 
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -199,7 +186,7 @@ export default function InvoiceDetailPage() {
       setPayments(response.data.payments || [])
       setNotes(response.data.invoice.notes || "")
 
-      // If this is the first load and there's an amount due, pre-fill the payment amount
+      // Pre-fill the payment amount if unpaid
       if (response.data.invoice.status === "unpaid") {
         const totalPaid = (response.data.payments || []).reduce(
           (sum: number, payment: Payment) => sum + payment.amount,
@@ -241,7 +228,7 @@ export default function InvoiceDetailPage() {
       )
 
       setSuccessMessage("Invoice notes updated successfully")
-      setTimeout(() => setSuccessMessage(""), 5000)
+      setTimeout(() => setSuccessMessage(""), 3000)
     } catch (error) {
       console.error("Error updating invoice notes:", error)
       if (axios.isAxiosError(error) && error.response) {
@@ -274,18 +261,14 @@ export default function InvoiceDetailPage() {
         },
       )
 
-      setSuccessMessage(
-        `Invoice ${
-          action === "markPaid"
-            ? "marked as paid"
-            : action === "markUnpaid"
-              ? "marked as unpaid"
-              : action === "delete"
-                ? "deleted"
-                : "restored"
-        } successfully`,
-      )
+      const actionLabels = {
+        markPaid: "marked as paid",
+        markUnpaid: "marked as unpaid",
+        delete: "deleted",
+        restore: "restored"
+      }
 
+      setSuccessMessage(`Invoice ${actionLabels[action as keyof typeof actionLabels]} successfully`)
       fetchInvoiceDetails() // Refresh data
     } catch (error) {
       console.error("Error updating invoice status:", error)
@@ -334,6 +317,7 @@ export default function InvoiceDetailPage() {
       setPaymentAmount(0)
       setPaymentMethod("cash")
       setPaymentNotes("")
+      setActiveTab("payments")
 
       fetchInvoiceDetails() // Refresh data
     } catch (error) {
@@ -356,12 +340,10 @@ export default function InvoiceDetailPage() {
         printWindow.document.write("<html><head><title>Print Invoice</title>")
         printWindow.document.write("<style>")
         printWindow.document.write(`
-          body { font-family: Inter, system-ui, sans-serif; margin: 0; padding: 20px; }
+          body { font-family: system-ui, -apple-system, sans-serif; }
           table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #e5e7eb; padding: 12px; }
+          th, td { border: 1px solid #e5e7eb; padding: 8px; }
           th { background-color: #f9fafb; }
-          .invoice-header { margin-bottom: 24px; }
-          .invoice-footer { margin-top: 24px; }
         `)
         printWindow.document.write("</style></head><body>")
         printWindow.document.write(content.innerHTML)
@@ -381,34 +363,51 @@ export default function InvoiceDetailPage() {
     return invoice.amount - calculateTotalPaid()
   }
 
+  // Format date as DD MMM YYYY
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return new Intl.DateTimeFormat('en-US', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    }).format(date)
+  }
+
+  // Show loading spinner
   if (isLoading) {
     return (
       <NavbarLayout>
-        <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="animate-spin h-12 w-12 text-indigo-600" />
-            <span className="text-gray-600 font-medium">Loading invoice details...</span>
+        <div className="min-h-screen bg-gray-50 p-6">
+          <div className="flex justify-center items-center h-64">
+            <div className="flex flex-col items-center">
+              <RefreshCw className="animate-spin h-8 w-8 text-blue-600 mb-2" />
+              <span className="text-gray-600 font-medium">Loading invoice details...</span>
+            </div>
           </div>
         </div>
       </NavbarLayout>
     )
   }
 
+  // Show error state
   if (error && !invoice) {
     return (
       <NavbarLayout>
         <div className="min-h-screen bg-gray-50 p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md mb-6">
-              <div className="flex items-center">
-                <XCircle className="h-5 w-5 text-red-500 mr-2" />
-                <p className="text-red-700">{error}</p>
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center mb-6">
+              <Link href="/billing" className="flex items-center text-blue-600 hover:text-blue-800 transition-colors">
+                <ArrowLeft className="mr-2" size={16} />
+                <span>Back to Billing</span>
+              </Link>
+            </div>
+            
+            <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-md mb-4">
+              <div className="flex">
+                <AlertTriangle className="h-5 w-5 text-rose-500 mr-2" />
+                <p className="text-rose-700">{error}</p>
               </div>
             </div>
-            <Link href="/billing" className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium">
-              <ArrowLeft className="mr-2" size={16} />
-              Back to Billing
-            </Link>
           </div>
         </div>
       </NavbarLayout>
@@ -417,479 +416,505 @@ export default function InvoiceDetailPage() {
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gray-50">
-        {/* Notification system */}
-        <AnimatePresence>
-          {successMessage && (
-            <Alert message={successMessage} type="success" onClose={() => setSuccessMessage("")} />
-          )}
-          
-          {error && (
-            <Alert message={error} type="error" onClose={() => setError("")} />
-          )}
-        </AnimatePresence>
-        
-        {/* Main content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Back Link */}
           <div className="mb-6">
-            <Link href="/billing" className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium">
-              <ArrowLeft className="mr-2" size={18} />
+            <Link 
+              href="/billing" 
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 transition-colors font-medium"
+            >
+              <ArrowLeft className="mr-1.5" size={18} />
               Back to Billing
             </Link>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">Invoice Details</h1>
-            <div className="flex flex-wrap gap-2">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+                Invoice #{invoice?.invoiceNumber}
+              </h1>
+              <div className="flex items-center mt-2 text-gray-500 space-x-3">
+                <span className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-1.5" />
+                  {invoice && formatDate(invoice.createdAt)}
+                  </span>
+                <span className="hidden md:inline">•</span>
+                <span className="flex items-center">
+                  Due: {invoice && formatDate(invoice.dueDate)}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {invoice && !invoice.deleted && (
+                <>
+                  <StatusBadge status={invoice.status} />
+                  {invoice.status === "unpaid" && (
+                    <button
+                      onClick={() => setShowPaymentForm(true)}
+                      className="ml-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors
+                      border border-emerald-200 px-3 py-1 rounded-lg text-sm flex items-center"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+                      Add Payment
+                    </button>
+                  )}
+                </>
+              )}
+              {invoice?.deleted && <StatusBadge status="deleted" />}
+              
               <button
                 onClick={handlePrint}
-                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md shadow-sm flex items-center transition-colors"
+                className="ml-2 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors
+                border border-blue-200 px-3 py-1 rounded-lg text-sm flex items-center"
               >
-                <Printer className="mr-2" size={18} />
-                Print Invoice
+                <Printer className="h-3.5 w-3.5 mr-1.5" />
+                Print
               </button>
-
-              {invoice && invoice.status === "unpaid" && (
-                <button
-                  onClick={() => setShowPaymentForm(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center transition-colors"
-                >
-                  <CreditCard className="mr-2" size={18} />
-                  Record Payment
-                </button>
-              )}
             </div>
           </div>
-
+          
+          {/* Notification Messages */}
+          {error && (
+            <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-md mb-4">
+              <div className="flex">
+                <AlertTriangle className="h-5 w-5 text-rose-500 mr-2 flex-shrink-0" />
+                <p className="text-rose-700">{error}</p>
+              </div>
+            </div>
+          )}
+          
+          {successMessage && (
+            <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-md mb-4">
+              <div className="flex">
+                <CheckCircle className="h-5 w-5 text-emerald-500 mr-2 flex-shrink-0" />
+                <p className="text-emerald-700">{successMessage}</p>
+              </div>
+            </div>
+          )}
+          
           {invoice && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Main content - Invoice Details */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Invoice header card */}
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <FileText className="text-indigo-600" size={22} />
-                          <h2 className="text-xl font-semibold text-gray-900">Invoice #{invoice.invoiceNumber}</h2>
-                        </div>
-                        <div className="mt-2 space-y-1">
-                          <div className="flex items-center text-gray-500">
-                            <Calendar size={14} className="mr-1.5" />
-                            <span>Created: {new Date(invoice.createdAt).toLocaleDateString('en-US', { 
-                              year: 'numeric', month: 'short', day: 'numeric' 
-                            })}</span>
-                          </div>
-                          <div className="flex items-center text-gray-500">
-                            <Calendar size={14} className="mr-1.5" />
-                            <span>Due: {new Date(invoice.dueDate).toLocaleDateString('en-US', { 
-                              year: 'numeric', month: 'short', day: 'numeric' 
-                            })}</span>
-                          </div>
-                          {invoice.paidDate && (
-                            <div className="flex items-center text-gray-500">
-                              <Calendar size={14} className="mr-1.5" />
-                              <span>Paid: {new Date(invoice.paidDate).toLocaleDateString('en-US', { 
-                                year: 'numeric', month: 'short', day: 'numeric' 
-                              })}</span>
-                            </div>
-                          )}
-                        </div>
+              {/* Main Content */}
+              <div className="lg:col-span-2">
+                {/* Tabs */}
+                <div className="mb-4 border-b border-gray-200">
+                  <div className="flex -mb-px space-x-6">
+                    <button
+                      className={`px-1 py-3 border-b-2 font-medium text-sm ${
+                        activeTab === "details"
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                      onClick={() => setActiveTab("details")}
+                    >
+                      <div className="flex items-center">
+                        <FileText className="h-4 w-4 mr-2" />
+                        Invoice Details
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <StatusBadge status={invoice.status} deleted={invoice.deleted} />
+                    </button>
+                    <button
+                      className={`px-1 py-3 border-b-2 font-medium text-sm ${
+                        activeTab === "payments"
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                      onClick={() => setActiveTab("payments")}
+                    >
+                      <div className="flex items-center">
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Payments
+                        {payments.length > 0 && (
+                          <span className="ml-1.5 bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs">
+                            {payments.length}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Customer & Payment Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Customer Information */}
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                      <User className="text-indigo-600 mr-2" size={18} />
-                      Customer Information
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-start">
-                        <User className="text-gray-400 mt-0.5 mr-3" size={16} />
-                        <div>
-                          <p className="font-medium text-gray-900">{invoice.customerName}</p>
-                        </div>
-                      </div>
-                      
-                      {invoice.customerPhone && (
-                        <div className="flex items-start">
-                          <Phone className="text-gray-400 mt-0.5 mr-3" size={16} />
-                          <p className="text-gray-600">{invoice.customerPhone}</p>
-                        </div>
-                      )}
-                      
-                      {customer && customer.email && (
-                        <div className="flex items-start">
-                          <Mail className="text-gray-400 mt-0.5 mr-3" size={16} />
-                          <p className="text-gray-600">{customer.email}</p>
-                        </div>
-                      )}
-                      
-                      {customer && customer.address && (
-                        <div className="flex items-start">
-                          <Home className="text-gray-400 mt-0.5 mr-3" size={16} />
-                          <p className="text-gray-600">{customer.address}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Payment Summary */}
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                      <CreditCard className="text-indigo-600 mr-2" size={18} />
-                      Payment Summary
-                    </h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Subtotal:</span>
-                        <span className="font-medium">KES {invoice.amount.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Total Paid:</span>
-                        <span className="font-medium text-green-600">KES {calculateTotalPaid().toFixed(2)}</span>
-                      </div>
-                      <div className="border-t border-gray-100 my-2 pt-2"></div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-900">Amount Due:</span>
-                        <span className={`font-bold ${calculateAmountDue() > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          KES {calculateAmountDue().toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
+                    </button>
                   </div>
                 </div>
                 
-                {/* Items Table */}
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100">
-                    <h3 className="text-lg font-semibold">Items</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Item
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Quantity
-                          </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Price
-                          </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Subtotal
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {invoice.items.map((item, index) => (
-                          <tr key={index} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 text-sm text-gray-900">{item.name}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600 text-center">{item.quantity}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600 text-right">
-                              KES {item.price.toFixed(2)}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                              KES {item.subtotal.toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-gray-50">
-                          <td colSpan={3} className="px-6 py-3 text-right text-sm font-medium text-gray-900">
-                            Total:
-                          </td>
-                          <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">
-                            KES {invoice.amount.toFixed(2)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Notes Section */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center">
-                    <FileText className="text-indigo-600 mr-2" size={18} />
-                    Notes
-                  </h3>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                    rows={3}
-                    placeholder="Add notes about this invoice..."
-                  ></textarea>
-                  <button
-                    onClick={handleSaveNotes}
-                    disabled={isSaving}
-                    className="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Notes
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Payment History */}
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold flex items-center">
-                      <CreditCard className="text-indigo-600 mr-2" size={18} />
-                      Payment History
-                    </h3>
-                    {invoice.status === "unpaid" && !showPaymentForm && (
-                      <button
-                        onClick={() => setShowPaymentForm(true)}
-                        className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center"
-                      >
-                        <CreditCard className="mr-1" size={14} />
-                        Add Payment
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Payment Form */}
-                  <AnimatePresence>
-                    {showPaymentForm && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="border-b border-gray-200 overflow-hidden"
-                      >
-                        <div className="p-6 bg-gray-50">
-                          <h4 className="text-md font-medium mb-4">Record Payment</h4>
-                          <form onSubmit={handleAddPayment}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Payment Amount
-                                </label>
-                                <div className="relative rounded-md shadow-sm">
-                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span className="text-gray-500 sm:text-sm">KES </span>
+                {/* Details Tab */}
+                {activeTab === "details" && (
+                  <div className="space-y-6">
+                    {/* Customer & Payment Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <InfoCard title="Customer Information">
+                        <div className="space-y-2">
+                          <p className="text-gray-900 font-medium">{invoice.customerName}</p>
+                          {invoice.customerPhone && (
+                            <p className="text-gray-600 flex items-center">
+                              <span className="text-gray-400 mr-2">Phone:</span>
+                              {invoice.customerPhone}
+                            </p>
+                          )}
+                          {customer?.email && (
+                            <p className="text-gray-600 flex items-center">
+                              <span className="text-gray-400 mr-2">Email:</span>
+                              {customer.email}
+                            </p>
+                          )}
+                          {customer?.address && (
+                            <p className="text-gray-600 flex items-center">
+                              <span className="text-gray-400 mr-2">Address:</span>
+                              {customer.address}
+                            </p>
+                          )}
+                        </div>
+                      </InfoCard>
+                      
+                      <InfoCard title="Payment Summary">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center text-gray-600">
+                            <span>Subtotal:</span>
+                            <span>${invoice.amount.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-gray-600">
+                            <span>Total Paid:</span>
+                            <span className={payments.length > 0 ? "text-emerald-600" : ""}>
+                              ${calculateTotalPaid().toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                            <span className="font-medium text-gray-900">Amount Due:</span>
+                            <span className="font-medium text-lg text-gray-900">
+                              ${calculateAmountDue().toFixed(2)}
+                            </span>
+                          </div>
+                          {invoice.status === "paid" && invoice.paidDate && (
+                            <div className="text-xs text-emerald-600 mt-2">
+                              Paid on {formatDate(invoice.paidDate)}
+                            </div>
+                          )}
+                        </div>
+                      </InfoCard>
+                    </div>
+                    
+                    {/* Items Table */}
+                    <InfoCard title="Invoice Items">
+                      <div className="overflow-x-auto -mx-5 px-5">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead>
+                            <tr>
+                              <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Item
+                              </th>
+                              <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Qty
+                              </th>
+                              <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Original Price
+                              </th>
+                              <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actual Price
+                              </th>
+                              <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Subtotal
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {invoice.items.map((item, index) => (
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-3 py-4 text-sm text-gray-900">{item.name}</td>
+                                <td className="px-3 py-4 text-sm text-gray-600 text-center">{item.quantity}</td>
+                                <td className="px-3 py-4 text-sm text-gray-600 text-right">
+                                  ${item.price.toFixed(2)}
+                                </td>
+                                <td className="px-3 py-4 text-sm text-right">
+                                  <div className="text-gray-900">
+                                    ${(item.adjustedPrice !== undefined ? item.adjustedPrice : item.price).toFixed(2)}
                                   </div>
-                                  <input
-                                    type="number"
-                                    value={paymentAmount}
-                                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
-                                    min="0"
-                                    step="0.01"
-                                    required
-                                  />
+                                  {item.adjustedPrice !== undefined && item.adjustedPrice < item.price && (
+                                    <div className="text-xs text-emerald-600">
+                                      ({(((item.price - item.adjustedPrice) / item.price) * 100).toFixed(0)}% discount)
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-4 text-sm text-gray-900 font-medium text-right">
+                                  ${item.subtotal.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="bg-gray-50">
+                              <td colSpan={4} className="px-3 py-3 text-sm font-medium text-gray-900 text-right">
+                                Total:
+                              </td>
+                              <td className="px-3 py-3 text-sm font-medium text-gray-900 text-right">
+                                ${invoice.amount.toFixed(2)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </InfoCard>
+                    
+                    {/* Notes */}
+                    <InfoCard title="Notes">
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 
+                        placeholder:text-gray-400 text-sm"
+                        rows={3}
+                        placeholder="Add notes about this invoice..."
+                      />
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          onClick={handleSaveNotes}
+                          disabled={isSaving}
+                          className="inline-flex items-center bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 
+                          transition-colors text-white font-medium py-2 px-4 rounded-md text-sm focus:outline-none focus:ring-2 
+                          focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {isSaving ? (
+                            <>
+                              <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              Save Notes
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </InfoCard>
+                  </div>
+                )}
+                
+                {/* Payments Tab */}
+                {activeTab === "payments" && (
+                  <div className="space-y-6">
+                    <InfoCard title="Payment History">
+                      {payments.length > 0 ? (
+                        <div className="overflow-x-auto -mx-5 px-5">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead>
+                              <tr>
+                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Date
+                                </th>
+                                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Amount
+                                </th>
+                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Method
+                                </th>
+                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Notes
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-100">
+                              {payments.map((payment) => (
+                                <tr key={payment._id.toString()} className="hover:bg-gray-50">
+                                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    {formatDate(payment.date)}
+                                  </td>
+                                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium text-right">
+                                    ${payment.amount.toFixed(2)}
+                                  </td>
+                                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    {payment.method.charAt(0).toUpperCase() + payment.method.slice(1)}
+                                  </td>
+                                  <td className="px-3 py-4 text-sm text-gray-600">
+                                    {payment.notes || "-"}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="bg-gray-50">
+                                <td colSpan={1} className="px-3 py-3 text-sm font-medium text-gray-900">
+                                  Total Paid:
+                                </td>
+                                <td className="px-3 py-3 text-sm font-medium text-emerald-700 text-right">
+                                  ${calculateTotalPaid().toFixed(2)}
+                                </td>
+                                <td colSpan={2}></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <p className="text-gray-500">No payments recorded yet.</p>
+                          {invoice.status === "unpaid" && (
+                            <button
+                              onClick={() => setShowPaymentForm(true)}
+                              className="mt-3 inline-flex items-center text-blue-600 hover:text-blue-800"
+                            >
+                              <PlusCircle className="h-4 w-4 mr-1.5" />
+                              Record a payment
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </InfoCard>
+                    
+                    {/* Payment Form */}
+                    {showPaymentForm && (
+                      <InfoCard title="Record Payment">
+                        <form onSubmit={handleAddPayment}>
+                          <div className="space-y-4">
+                            <div>
+                              <label htmlFor="paymentAmount" className="block text-sm font-medium text-gray-700 mb-1">
+                                Payment Amount
+                              </label>
+                              <div className="relative mt-1 rounded-md shadow-sm">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                  <span className="text-gray-500 sm:text-sm">$</span>
                                 </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Payment Method
-                                </label>
-                                <select
-                                  value={paymentMethod}
-                                  onChange={(e) => setPaymentMethod(e.target.value)}
-                                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                >
-                                  <option value="cash">Cash</option>
-                                  <option value="card">Credit/Debit Card</option>
-                                  <option value="bank">Bank Transfer</option>
-                                  <option value="mobile">Mobile Payment</option>
-                                  <option value="other">Other</option>
-                                </select>
+                                <input
+                                  type="number"
+                                  name="paymentAmount"
+                                  id="paymentAmount"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={paymentAmount}
+                                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                                  className="block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                  placeholder="0.00"
+                                  required
+                                />
                               </div>
                             </div>
-
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                            
+                            <div>
+                              <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700 mb-1">
+                                Payment Method
+                              </label>
+                              <select
+                                id="paymentMethod"
+                                name="paymentMethod"
+                                value={paymentMethod}
+                                onChange={(e) => setPaymentMethod(e.target.value)}
+                                className="block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                              >
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="check">Check</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label htmlFor="paymentNotes" className="block text-sm font-medium text-gray-700 mb-1">
+                                Notes (Optional)
+                              </label>
                               <textarea
+                                id="paymentNotes"
+                                name="paymentNotes"
+                                rows={2}
                                 value={paymentNotes}
                                 onChange={(e) => setPaymentNotes(e.target.value)}
-                                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                rows={2}
-                                placeholder="Optional payment notes..."
-                              ></textarea>
+                                className="block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                                placeholder="Add any additional payment details..."
+                              />
                             </div>
-
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                type="button"
-                                onClick={() => setShowPaymentForm(false)}
-                                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md shadow-sm transition-colors"
->
-  Cancel
-</button>
-<button
-  type="submit"
-  disabled={isSaving}
-  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
->
-  {isSaving ? (
-    <>
-      <Loader2 className="animate-spin h-4 w-4 mr-2" />
-      Saving...
-    </>
-  ) : (
-    <>
-      <CreditCard className="h-4 w-4 mr-2" />
-      Record Payment
-    </>
-  )}
-</button>
-</div>
-</form>
-</div>
-</motion.div>
-)}
-</AnimatePresence>
-
-{payments.length === 0 ? (
-  <div className="p-6 text-center text-gray-500">
-    No payments recorded for this invoice yet.
-  </div>
-) : (
-  <div className="overflow-x-auto">
-    <table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50">
-        <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Date
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Method
-          </th>
-          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Amount
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Notes
-          </th>
-        </tr>
-      </thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {payments.map((payment) => (
-          <tr key={payment._id} className="hover:bg-gray-50 transition-colors">
-            <td className="px-6 py-4 text-sm text-gray-900">
-              {new Date(payment.date).toLocaleDateString('en-US', {
-                year: 'numeric', month: 'short', day: 'numeric'
-              })}
-            </td>
-            <td className="px-6 py-4 text-sm text-gray-600">
-              <PaymentMethodBadge method={payment.method} />
-            </td>
-            <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-              ${payment.amount.toFixed(2)}
-            </td>
-            <td className="px-6 py-4 text-sm text-gray-600">
-              {payment.notes || "-"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)}
-</div>
-</div>
-
-{/* Sidebar */}
-<div className="space-y-6">
-  {/* Action Card */}
-  <div className="bg-white rounded-xl shadow-sm p-6">
-    <h3 className="text-lg font-semibold mb-4">Actions</h3>
-    <div className="space-y-3">
-      {invoice.deleted ? (
-        <button
-          onClick={() => handleStatusChange("restore")}
-          disabled={isSaving}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? (
-            <Loader2 className="animate-spin h-4 w-4 mr-2" />
-          ) : (
-            <RefreshCcw className="h-4 w-4 mr-2" />
+                          </div>
+                          
+                          <div className="mt-5 flex justify-end space-x-3">
+                            <button
+                              type="button"
+                              onClick={() => setShowPaymentForm(false)}
+                              className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isSaving}
+                              className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {isSaving ? (
+                                <>
+                                  <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                                  Processing...
+                                </>
+                              ) : (
+                                "Record Payment"
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </InfoCard>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Sidebar */}
+              <div className="lg:col-span-1">
+                <div className="sticky top-6 space-y-6">
+                  {/* Invoice Actions */}
+                  <InfoCard title="Invoice Actions">
+                    <div className="space-y-3">
+                      {!invoice.deleted && (
+                        <>
+                          {invoice.status === "unpaid" ? (
+                            <ActionButton
+                              icon={<CheckCircle className="h-4 w-4" />}
+                              label="Mark as Paid"
+                              onClick={() => handleStatusChange("markPaid")}
+                              variant="success"
+                              disabled={isSaving}
+                              isLoading={isSaving}
+                            />
+                          ) : (
+                            <ActionButton
+                              icon={<XCircle className="h-4 w-4" />}
+                              label="Mark as Unpaid"
+                              onClick={() => handleStatusChange("markUnpaid")}
+                              variant="warning"
+                              disabled={isSaving}
+                              isLoading={isSaving}
+                            />
+                          )}
+                          
+                          <ActionButton
+                            icon={<Trash2 className="h-4 w-4" />}
+                            label="Delete Invoice"
+                            onClick={() => handleStatusChange("delete")}
+                            variant="danger"
+                            disabled={isSaving}
+                            isLoading={isSaving}
+                          />
+                        </>
+                      )}
+                      
+                      {invoice.deleted && (
+                        <ActionButton
+                          icon={<RotateCcw className="h-4 w-4" />}
+                          label="Restore Invoice"
+                          onClick={() => handleStatusChange("restore")}
+                          variant="primary"
+                          disabled={isSaving}
+                          isLoading={isSaving}
+                        />
+                      )}
+                    </div>
+                  </InfoCard>
+                  
+                  {/* Print Preview */}
+                  <div className="hidden">
+                    <div ref={printRef}>
+                      <Print 
+                        invoice={invoice}
+                        customer={customer}
+                        payments={payments}
+                        amountDue={calculateAmountDue()} inventory={[]}                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
-          Restore Invoice
-        </button>
-      ) : (
-        <>
-          {invoice.status === "unpaid" ? (
-            <button
-              onClick={() => handleStatusChange("markPaid")}
-              disabled={isSaving}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <Loader2 className="animate-spin h-4 w-4 mr-2" />
-              ) : (
-                <CheckCircle className="h-4 w-4 mr-2" />
-              )}
-              Mark as Paid
-            </button>
-          ) : (
-            <button
-              onClick={() => handleStatusChange("markUnpaid")}
-              disabled={isSaving}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <Loader2 className="animate-spin h-4 w-4 mr-2" />
-              ) : (
-                <XCircle className="h-4 w-4 mr-2" />
-              )}
-              Mark as Unpaid
-            </button>
-          )}
-          <button
-            onClick={() => handleStatusChange("delete")}
-            disabled={isSaving}
-            className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-red-600 font-medium py-2 px-4 rounded-md shadow-sm flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <Loader2 className="animate-spin h-4 w-4 mr-2" />
-            ) : (
-              <Trash2 className="h-4 w-4 mr-2" />
-            )}
-            Delete Invoice
-          </button>
-        </>
-      )}
-    </div>
-  </div>
-
-  {/* Printable preview hidden section */}
-  <div className="hidden">
-    <div ref={printRef}>
-      {customer && <Print invoice={invoice} customer={customer} payments={payments} inventory={[]} items={[]} invoiceNumber={""} customerName={""} customerPhone={""} amount={0} dueDate={""} status={"paid"} />}
-    </div>
-  </div>
-</div>
-</div>
-)}
-</div>
-</div>
-</NavbarLayout>
-)
+        </div>
+      </div>
+    </NavbarLayout>
+  )
 }

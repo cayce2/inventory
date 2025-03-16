@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     const { invoiceNumber, customerName, customerPhone = "", dueDate, items } = data
     let { amount } = data
 
-    // If amount is not provided, calculate it from the items
+    // If amount is not provided, calculate it from the items with adjusted prices
     if (amount === undefined || amount === 0) {
       const client = await clientPromise
       const db = client.db("inventory_management")
@@ -68,10 +68,12 @@ export async function POST(req: NextRequest) {
       // Create a map for quick lookup
       const itemMap = new Map(inventoryItems.map((item) => [item._id.toString(), item]))
 
-      // Calculate the total amount
-      amount = items.reduce((total: number, item: { itemId: string; quantity: number }) => {
+      // Calculate the total amount using adjusted prices if available
+      amount = items.reduce((total: number, item: { itemId: string; adjustedPrice?: number; quantity: number }) => {
         const inventoryItem = itemMap.get(item.itemId)
-        return total + (inventoryItem ? inventoryItem.price * item.quantity : 0)
+        // Use the adjusted price if provided, otherwise use the original price
+        const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0
+        return total + price * item.quantity
       }, 0)
     }
 
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     try {
       await session.withTransaction(async () => {
-        // Insert the new invoice
+        // Insert the new invoice with adjusted prices
         const result = await db.collection("invoices").insertOne(
           {
             userId,
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
             customerPhone,
             amount,
             dueDate,
-            items,
+            items, // This now includes adjustedPrice for items with custom pricing
             status: "unpaid",
             createdAt: new Date(),
             deleted: false,
@@ -120,7 +122,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function PUT(req:NextRequest) {
+export async function PUT(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
     if (!userId) {

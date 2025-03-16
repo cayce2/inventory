@@ -49,13 +49,17 @@ export async function GET(req: NextRequest, { params }: { params: { invoiceId: s
       .toArray()
 
     // Map the inventory items to the invoice items
-    const itemsWithDetails = invoice.items.map((item: { itemId: string; quantity: number }) => {
+    const itemsWithDetails = invoice.items.map((item: { itemId: string, adjustedPrice?: number, quantity: number }) => {
       const inventoryItem = items.find((i) => i._id.toString() === item.itemId.toString())
+      const originalPrice = inventoryItem?.price || 0
+      const actualPrice = item.adjustedPrice !== undefined ? item.adjustedPrice : originalPrice
+
       return {
         ...item,
         name: inventoryItem?.name || "Unknown Item",
-        price: inventoryItem?.price || 0,
-        subtotal: (inventoryItem?.price || 0) * item.quantity,
+        price: originalPrice,
+        adjustedPrice: item.adjustedPrice,
+        subtotal: actualPrice * item.quantity,
       }
     })
 

@@ -76,6 +76,7 @@ export const invoiceItemSchema = z.object({
     message: "Invalid item ID format",
   }),
   quantity: z.number().int().positive("Quantity must be a positive integer"),
+  adjustedPrice: z.number().nonnegative("Price must be a non-negative number").optional(),
 })
 
 export const invoiceSchema = z
