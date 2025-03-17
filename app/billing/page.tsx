@@ -705,11 +705,12 @@ export default function Billing() {
                         <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Items</h4>
                         {newInvoice.items.length === 0 ? (
                           <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
-                            <p className="text-gray-500">No items added to this invoice</p>
-                            <p className="text-sm text-gray-400">Select items from the inventory above</p>
-                          </div>
-                        ) : (
-                          <div className="border border-gray-200 rounded-md overflow-hidden">
+                              <p className="text-gray-500">No items added to this invoice</p>
+                              <p className="text-sm text-gray-400">Select items from the inventory above</p>
+                            </div>
+                          ) : (
+                          <div className="overflow-x-auto border border-gray-200 rounded-md">
+                          <div className="min-w-full inline-block align-middle">
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-gray-50">
                                 <tr>
@@ -735,7 +736,7 @@ export default function Billing() {
                                   const inventoryItem = inventory.find((i) => i._id === item.itemId);
                                   const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0;
                                   const subtotal = price * item.quantity;
-                                  
+              
                                   return (
                                     <tr key={index}>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -762,7 +763,7 @@ export default function Billing() {
                                           type="button"
                                           onClick={() => handleRemoveItem(index)}
                                           className="text-red-600 hover:text-red-800"
-                                        >
+                                          >
                                           <Trash2 size={16} />
                                         </button>
                                       </td>
@@ -780,6 +781,7 @@ export default function Billing() {
                                 </tr>
                               </tbody>
                             </table>
+                          </div>
                           </div>
                         )}
                       </div>
