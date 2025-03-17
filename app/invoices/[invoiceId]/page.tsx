@@ -569,18 +569,18 @@ export default function InvoiceDetailPage() {
                         <div className="space-y-3">
                           <div className="flex justify-between items-center text-gray-600">
                             <span>Subtotal:</span>
-                            <span>${invoice.amount.toFixed(2)}</span>
+                            <span>KES {invoice.amount.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between items-center text-gray-600">
                             <span>Total Paid:</span>
                             <span className={payments.length > 0 ? "text-emerald-600" : ""}>
-                              ${calculateTotalPaid().toFixed(2)}
+                              KES {calculateTotalPaid().toFixed(2)}
                             </span>
                           </div>
                           <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                             <span className="font-medium text-gray-900">Amount Due:</span>
                             <span className="font-medium text-lg text-gray-900">
-                              ${calculateAmountDue().toFixed(2)}
+                              KES {calculateAmountDue().toFixed(2)}
                             </span>
                           </div>
                           {invoice.status === "paid" && invoice.paidDate && (
@@ -621,11 +621,11 @@ export default function InvoiceDetailPage() {
                                 <td className="px-3 py-4 text-sm text-gray-900">{item.name}</td>
                                 <td className="px-3 py-4 text-sm text-gray-600 text-center">{item.quantity}</td>
                                 <td className="px-3 py-4 text-sm text-gray-600 text-right">
-                                  ${item.price.toFixed(2)}
+                                  KES {item.price.toFixed(2)}
                                 </td>
                                 <td className="px-3 py-4 text-sm text-right">
                                   <div className="text-gray-900">
-                                    ${(item.adjustedPrice !== undefined ? item.adjustedPrice : item.price).toFixed(2)}
+                                    KES {(item.adjustedPrice !== undefined ? item.adjustedPrice : item.price).toFixed(2)}
                                   </div>
                                   {item.adjustedPrice !== undefined && item.adjustedPrice < item.price && (
                                     <div className="text-xs text-emerald-600">
@@ -634,7 +634,7 @@ export default function InvoiceDetailPage() {
                                   )}
                                 </td>
                                 <td className="px-3 py-4 text-sm text-gray-900 font-medium text-right">
-                                  ${item.subtotal.toFixed(2)}
+                                  KES {item.subtotal.toFixed(2)}
                                 </td>
                               </tr>
                             ))}
@@ -643,7 +643,7 @@ export default function InvoiceDetailPage() {
                                 Total:
                               </td>
                               <td className="px-3 py-3 text-sm font-medium text-gray-900 text-right">
-                                ${invoice.amount.toFixed(2)}
+                                KES {invoice.amount.toFixed(2)}
                               </td>
                             </tr>
                           </tbody>
@@ -731,7 +731,7 @@ export default function InvoiceDetailPage() {
                                   Total Paid:
                                 </td>
                                 <td className="px-3 py-3 text-sm font-medium text-emerald-700 text-right">
-                                  ${calculateTotalPaid().toFixed(2)}
+                                  KES {calculateTotalPaid().toFixed(2)}
                                 </td>
                                 <td colSpan={2}></td>
                               </tr>
@@ -765,7 +765,7 @@ export default function InvoiceDetailPage() {
                               </label>
                               <div className="relative mt-1 rounded-md shadow-sm">
                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                  <span className="text-gray-500 sm:text-sm">$</span>
+                                  <span className="text-gray-500 sm:text-sm">KES </span>
                                 </div>
                                 <input
                                   type="number"
