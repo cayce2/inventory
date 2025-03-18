@@ -572,7 +572,7 @@ export default function UserDetailPage() {
                         <div className="pt-4 border-t border-gray-200">
                           <h3 className="text-sm font-medium text-gray-500">Payment Due</h3>
                           <p className="mt-1 text-lg font-bold text-red-600">
-                            ${user.paymentDue.toFixed(2)}
+                            KES {user.paymentDue.toFixed(2)}
                           </p>
                         </div>
                       )}
@@ -621,7 +621,7 @@ export default function UserDetailPage() {
                               {new Date(invoice.createdAt).toLocaleDateString()}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ${invoice.amount.toFixed(2)}
+                              KES {invoice.amount.toFixed(2)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
