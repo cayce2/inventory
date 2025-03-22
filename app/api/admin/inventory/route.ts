@@ -1,14 +1,19 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest,NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 
+// Update the GET function to support filtering by userId
 export async function GET(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Get the URL to extract query parameters
+    const url = new URL(req.url)
+    const filterByUserId = url.searchParams.get("userId")
 
     const client = await clientPromise
     const db = client.db("inventory_management")
@@ -19,8 +24,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get all inventory items from all users
-    const inventory = await db.collection("inventory").find({}).toArray()
+    // Build the query based on whether we're filtering by userId
+    const query = filterByUserId ? { userId: new ObjectId(filterByUserId) } : {}
+
+    // Get inventory items based on the query
+    const inventory = await db.collection("inventory").find(query).toArray()
 
     // Get user information for each inventory item
     const userIds = [...new Set(inventory.map((item) => item.userId))]

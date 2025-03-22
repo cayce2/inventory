@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react"
 import axios from "axios"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { Edit, Trash2, AlertTriangle } from "lucide-react"
+import { Edit, Trash2, AlertTriangle, ArrowLeft } from "lucide-react"
 import Image from "next/image"
 
 interface InventoryItem {
@@ -26,9 +26,13 @@ export default function AdminInventory() {
   const [searchTerm, setSearchTerm] = useState("")
   const router = useRouter()
 
+  const searchParams = useSearchParams()
+  const userId = searchParams.get("userId")
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
+
   useEffect(() => {
     fetchInventory()
-  }, [])
+  }, [userId])
 
   const fetchInventory = async () => {
     try {
@@ -37,10 +41,27 @@ export default function AdminInventory() {
         router.push("/login")
         return
       }
-      const response = await axios.get("/api/admin/inventory", {
+
+      // If userId is provided, fetch inventory for that specific user
+      const endpoint = userId ? `/api/admin/inventory?userId=${userId}` : "/api/admin/inventory"
+
+      const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
       setInventory(response.data)
+
+      // If we're viewing a specific user's inventory, fetch their details
+      if (userId) {
+        try {
+          const userResponse = await axios.get(`/api/admin/users/${userId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          setCurrentUser(userResponse.data)
+        } catch (userError) {
+          console.error("Error fetching user details:", userError)
+        }
+      }
+
       setIsLoading(false)
     } catch (error) {
       console.error("Error fetching inventory:", error)
@@ -102,6 +123,14 @@ export default function AdminInventory() {
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Admin Inventory Management</h1>
+          {userId && currentUser && (
+            <div className="flex flex-col">
+              <div className="flex items-center mb-2">
+                <h2 className="text-xl font-semibold">Viewing inventory for: {currentUser.name}</h2>
+              </div>
+              <p className="text-gray-600">{currentUser.email}</p>
+            </div>
+          )}
           <div className="flex items-center">
             <input
               type="text"
@@ -110,12 +139,30 @@ export default function AdminInventory() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="px-4 py-2 border rounded-md mr-4"
             />
-            <button
-              onClick={() => router.push("/admin")}
-              className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Back to Admin
-            </button>
+            {userId ? (
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => router.push("/admin/inventory")}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded flex items-center"
+                >
+                  <ArrowLeft className="mr-2 h-5 w-5" />
+                  View All Inventory
+                </button>
+                <button
+                  onClick={() => router.push("/admin")}
+                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+                >
+                  Back to Admin
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => router.push("/admin")}
+                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+              >
+                Back to Admin
+              </button>
+            )}
           </div>
         </div>
 
