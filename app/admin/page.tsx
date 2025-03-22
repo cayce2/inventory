@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
-import { useState, useEffect, Fragment } from "react"
+import { useState, useEffect, Fragment, useCallback } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
@@ -50,22 +50,20 @@ export default function AdminDashboard() {
   const [tableView, setTableView] = useState("all")
   const router = useRouter()
 
+  // Fetch users on mount only
   useEffect(() => {
     fetchUsers()
   }, [])
 
+  // Set default extension date once on mount
   useEffect(() => {
-    // Set default extension date to 30 days from now
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
     setExtensionDate(formatDateForInput(thirtyDaysFromNow))
   }, [])
 
-  useEffect(() => {
-    filterUsers()
-  }, [searchTerm, users, tableView])
-
-  const filterUsers = () => {
+  // Memoize the filterUsers function with useCallback
+  const filterUsers = useCallback(() => {
     let filtered = users
 
     // First apply search filter
@@ -88,8 +86,13 @@ export default function AdminDashboard() {
       filtered = filtered.filter(user => user.subscriptionStatus === "inactive" || user.subscriptionStatus === "expired")
     }
 
-    setFilteredUsers(filtered)
-  }
+    return filtered
+  }, [searchTerm, tableView, users])
+
+  // Apply the filtering effect with proper dependencies
+  useEffect(() => {
+    setFilteredUsers(filterUsers())
+  }, [filterUsers])
 
   const formatDateForInput = (date: Date) => {
     return date.toISOString().split('T')[0]
@@ -107,7 +110,7 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       })
       setUsers(response.data)
-      setFilteredUsers(response.data)
+      // Don't set filteredUsers here, it will be set by the useEffect
     } catch (error) {
       console.error("Error fetching users:", error)
       setError("An error occurred while fetching users")
