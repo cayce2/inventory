@@ -14,6 +14,12 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const filterByUserId = url.searchParams.get("userId")
 
+    // Add more detailed logging to help diagnose the issue
+    console.log("Query parameters:", url.searchParams.toString())
+    if (filterByUserId) {
+      console.log("Filtering by userId:", filterByUserId)
+    }
+
     const client = await clientPromise
     const db = client.db("inventory_management")
 
@@ -23,14 +29,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Build the query based on whether we're filtering by user ID
-    const query = filterByUserId ? { userId: new ObjectId(filterByUserId) } : {}
+    // Modify the query construction to ensure it works correctly
+    let query = {}
+    if (filterByUserId) {
+      try {
+        // Convert the userId to ObjectId for the query
+        query = { userId: new ObjectId(filterByUserId) }
+        console.log("Using query with ObjectId:", query)
+      } catch (error) {
+        console.error("Invalid ObjectId format for userId:", filterByUserId, error)
+        return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
+      }
+    }
 
-    // Get inventory items based on the query
+    // After fetching inventory, log the results
     const inventory = await db.collection("inventory").find(query).toArray()
+    console.log(`Found ${inventory.length} inventory items for query:`, JSON.stringify(query))
+    if (inventory.length === 0) {
+      console.log("No inventory items found for this query")
+    }
 
     // Get user information for each inventory item
-    const userIds = [...new Set(inventory.map((item) => item.userId))]
+    const userIds = [...new Set(inventory.map((item) => (item.userId ? item.userId.toString() : null)).filter(Boolean))]
+
     const users = await db
       .collection("users")
       .find({ _id: { $in: userIds.map((id) => new ObjectId(id)) } })
@@ -41,11 +62,12 @@ export async function GET(req: NextRequest) {
 
     // Add user information to inventory items
     const inventoryWithUserInfo = inventory.map((item) => {
-      const user = userMap.get(item.userId.toString())
+      const userIdStr = item.userId ? item.userId.toString() : null
+      const user = userIdStr ? userMap.get(userIdStr) : null
       return {
         ...item,
-        userName: user ? user.name : null,
-        userEmail: user ? user.email : null,
+        userName: user ? user.name : "Unknown",
+        userEmail: user ? user.email : "Unknown",
       }
     })
 

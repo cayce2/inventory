@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
 import { Edit, Trash2, AlertTriangle, ArrowLeft } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 
 interface InventoryItem {
   _id: string
@@ -32,8 +33,10 @@ export default function AdminInventory() {
     fetchInventory()
   }, [userId])
 
+  // Update the fetchInventory function and add some debugging
   const fetchInventory = async () => {
     try {
+      setIsLoading(true)
       const token = localStorage.getItem("token")
       if (!token) {
         router.push("/login")
@@ -43,14 +46,22 @@ export default function AdminInventory() {
       // If userId is provided, fetch only that user's inventory
       const endpoint = userId ? `/api/admin/inventory?userId=${userId}` : "/api/admin/inventory"
 
+      console.log("Fetching inventory from:", endpoint)
+
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
+
+      console.log("Inventory data received:", response.data)
       setInventory(response.data)
       setIsLoading(false)
     } catch (error) {
       console.error("Error fetching inventory:", error)
-      setError("An error occurred while fetching inventory items")
+      if (axios.isAxiosError(error) && error.response) {
+        setError(`Error: ${error.response.data.error || "Failed to fetch inventory items"}`)
+      } else {
+        setError("An unexpected error occurred while fetching inventory items")
+      }
       setIsLoading(false)
     }
   }
@@ -155,87 +166,110 @@ export default function AdminInventory() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Image
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Item Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Value
-                  </th>
-                  {!userId && (
+        {filteredInventory.length > 0 ? (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Owner
+                      Image
                     </th>
-                  )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredInventory.map((item) => (
-                  <tr key={item._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="h-16 w-16 relative">
-                        <Image
-                          src={`data:image/jpeg;base64,${item.image}`}
-                          alt={item.name}
-                          fill
-                          className="object-cover rounded"
-                        />
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-900">{item.quantity}</span>
-                        {item.quantity < item.lowStockThreshold && (
-                          <AlertTriangle className="ml-2 h-4 w-4 text-yellow-500" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.price.toFixed(2)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Item Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Quantity
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Price
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Value
+                    </th>
                     {!userId && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{item.userName || "Unknown"}</div>
-                        <div className="text-sm text-gray-500">{item.userEmail || "Unknown"}</div>
-                      </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Owner
+                      </th>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => router.push(`/admin/inventory/${item._id}`)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-3"
-                      >
-                        <Edit className="h-5 w-5" />
-                      </button>
-                      <button onClick={() => handleDeleteItem(item._id)} className="text-red-600 hover:text-red-900">
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredInventory.map((item) => (
+                    <tr key={item._id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-16 w-16 relative">
+                          <Image
+                            src={`data:image/jpeg;base64,${item.image}`}
+                            alt={item.name}
+                            fill
+                            className="object-cover rounded"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-900">{item.quantity}</span>
+                          {item.quantity < item.lowStockThreshold && (
+                            <AlertTriangle className="ml-2 h-4 w-4 text-yellow-500" />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.price.toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </td>
+                      {!userId && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{item.userName || "Unknown"}</div>
+                          <div className="text-sm text-gray-500">{item.userEmail || "Unknown"}</div>
+                        </td>
+                      )}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => router.push(`/admin/inventory/${item._id}`)}
+                          className="text-indigo-600 hover:text-indigo-900 mr-3"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </button>
+                        <button onClick={() => handleDeleteItem(item._id)} className="text-red-600 hover:text-red-900">
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="flex flex-col items-center justify-center py-12">
+              <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No inventory items found</h3>
+              <p className="text-gray-500 max-w-md">
+                {userId
+                  ? "This user doesn't have any inventory items yet."
+                  : "There are no inventory items in the system."}
+              </p>
+              {userId && (
+                <Link
+                  href={`/admin/users/${userId}`}
+                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to User Details
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </NavbarLayout>
   )
