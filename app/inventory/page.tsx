@@ -402,28 +402,29 @@ export default function Inventory() {
                     
                     return (
                       <Card key={item._id} className="overflow-hidden border border-gray-200 transition-all hover:shadow-md group">
-                        <div className="relative h-48 overflow-hidden bg-gray-100">
-                          <Image
-                            src={
-                              item.image
-                                ? `data:image/jpeg;base64,${item.image}`
-                                : item.imageUrl || "/placeholder.svg"
-                            }
-                            alt={item.name}
-                            width={400}
-                            height={300}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = "/placeholder.svg";
-                            }}
-                          />
-                          <div className="absolute top-2 right-2">
-                            <Badge className={`${stockStatus.color} text-white`}>
-                              {stockStatus.label}
-                            </Badge>
-                          </div>
-                        </div>
+                        <div className="relative h-48 overflow-hidden bg-white flex items-center justify-center">
+  <Image
+    src={
+      item.image
+        ? `data:image/jpeg;base64,${item.image}`
+        : item.imageUrl || "/placeholder.svg"
+    }
+    alt={item.name}
+    width={400}
+    height={300}
+    className="w-full h-full object-contain transition-transform group-hover:scale-105"
+    onError={(e) => {
+      const target = e.target as HTMLImageElement;
+      target.src = "/placeholder.svg";
+    }}
+    priority
+  />
+  <div className="absolute top-2 right-2">
+    <Badge className={`${stockStatus.color} text-white`}>
+      {stockStatus.label}
+    </Badge>
+  </div>
+</div>
                         <CardContent className="p-6">
                           <h3 className="text-xl font-semibold mb-3 line-clamp-1 text-gray-900">{item.name}</h3>
                           
@@ -558,21 +559,22 @@ export default function Inventory() {
                             <tr key={item._id} className="border-b hover:bg-gray-50">
                               <td className="p-4">
                                 <div className="flex items-center">
-                                  <div className="h-10 w-10 rounded-md bg-gray-100 mr-3 overflow-hidden border border-gray-200">
+                                  <div className="h-10 w-10 rounded-md bg-white mr-3 overflow-hidden border border-gray-200">
                                     <Image 
                                       src={
                                         item.image
                                           ? `data:image/jpeg;base64,${item.image}`
                                           : item.imageUrl || "/placeholder.svg"
-                                      }
-                                      alt={item.name}
-                                      width={20}
-                                      height={40}
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.src = "/placeholder.svg";
-                                      }}
+                                        }
+                                        alt={item.name}
+                                        width={40}
+                                        height={40}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => {
+                                          const target = e.target as HTMLImageElement;
+                                          target.src = "/placeholder.svg";
+                                        }}
+                                        priority
                                     />
                                   </div>
                                   <span className="font-medium text-gray-900">{item.name}</span>
