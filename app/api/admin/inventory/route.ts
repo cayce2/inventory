@@ -3,7 +3,6 @@ import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 
-// Update the GET function to support filtering by userId
 export async function GET(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
@@ -24,7 +23,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Build the query based on whether we're filtering by userId
+    // Build the query based on whether we're filtering by user ID
     const query = filterByUserId ? { userId: new ObjectId(filterByUserId) } : {}
 
     // Get inventory items based on the query

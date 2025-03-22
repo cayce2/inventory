@@ -25,10 +25,8 @@ export default function AdminInventory() {
   const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const router = useRouter()
-
   const searchParams = useSearchParams()
   const userId = searchParams.get("userId")
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null)
 
   useEffect(() => {
     fetchInventory()
@@ -42,26 +40,13 @@ export default function AdminInventory() {
         return
       }
 
-      // If userId is provided, fetch inventory for that specific user
+      // If userId is provided, fetch only that user's inventory
       const endpoint = userId ? `/api/admin/inventory?userId=${userId}` : "/api/admin/inventory"
 
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
       setInventory(response.data)
-
-      // If we're viewing a specific user's inventory, fetch their details
-      if (userId) {
-        try {
-          const userResponse = await axios.get(`/api/admin/users/${userId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          setCurrentUser(userResponse.data)
-        } catch (userError) {
-          console.error("Error fetching user details:", userError)
-        }
-      }
-
       setIsLoading(false)
     } catch (error) {
       console.error("Error fetching inventory:", error)
@@ -122,15 +107,7 @@ export default function AdminInventory() {
     <NavbarLayout>
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Admin Inventory Management</h1>
-          {userId && currentUser && (
-            <div className="flex flex-col">
-              <div className="flex items-center mb-2">
-                <h2 className="text-xl font-semibold">Viewing inventory for: {currentUser.name}</h2>
-              </div>
-              <p className="text-gray-600">{currentUser.email}</p>
-            </div>
-          )}
+          <h1 className="text-3xl font-bold">{userId ? "User Inventory Management" : "Admin Inventory Management"}</h1>
           <div className="flex items-center">
             <input
               type="text"
@@ -139,32 +116,22 @@ export default function AdminInventory() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="px-4 py-2 border rounded-md mr-4"
             />
-            {userId ? (
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => router.push("/admin/inventory")}
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded flex items-center"
-                >
-                  <ArrowLeft className="mr-2 h-5 w-5" />
-                  View All Inventory
-                </button>
-                <button
-                  onClick={() => router.push("/admin")}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-                >
-                  Back to Admin
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => router.push("/admin")}
-                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-              >
-                Back to Admin
-              </button>
-            )}
+            <button
+              onClick={() => (userId ? router.push(`/admin/users/${userId}`) : router.push("/admin"))}
+              className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded flex items-center"
+            >
+              <ArrowLeft className="mr-2 h-5 w-5" />
+              {userId ? "Back to User" : "Back to Admin"}
+            </button>
           </div>
         </div>
+
+        {userId && inventory.length > 0 && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 mb-6">
+            <p className="font-bold">Viewing inventory for: {inventory[0].userName || "Unknown User"}</p>
+            <p>{inventory[0].userEmail || ""}</p>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Inventory Statistics</h2>
@@ -208,9 +175,11 @@ export default function AdminInventory() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Value
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Owner
-                  </th>
+                  {!userId && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Owner
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -244,10 +213,12 @@ export default function AdminInventory() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       ${(item.price * item.quantity).toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{item.userName || "Unknown"}</div>
-                      <div className="text-sm text-gray-500">{item.userEmail || "Unknown"}</div>
-                    </td>
+                    {!userId && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{item.userName || "Unknown"}</div>
+                        <div className="text-sm text-gray-500">{item.userEmail || "Unknown"}</div>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => router.push(`/admin/inventory/${item._id}`)}
