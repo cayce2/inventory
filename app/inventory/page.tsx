@@ -560,9 +560,13 @@ export default function Inventory() {
                                 <div className="flex items-center">
                                   <div className="h-10 w-10 rounded-md bg-gray-100 mr-3 overflow-hidden border border-gray-200">
                                     <Image 
-                                      src={item.imageUrl || "/placeholder.svg"}
+                                      src={
+                                        item.image
+                                          ? `data:image/jpeg;base64,${item.image}`
+                                          : item.imageUrl || "/placeholder.svg"
+                                      }
                                       alt={item.name}
-                                      width={40}
+                                      width={20}
                                       height={40}
                                       className="h-full w-full object-cover"
                                       onError={(e) => {
@@ -574,7 +578,7 @@ export default function Inventory() {
                                   <span className="font-medium text-gray-900">{item.name}</span>
                                 </div>
                               </td>
-                              <td className="p-4 font-medium">${item.price.toFixed(2)}</td>
+                              <td className="p-4 font-medium">KES {item.price.toFixed(2)}</td>
                               <td className="p-4">
                                 <div className="flex items-center">
                                   <span className="font-medium mr-2">{item.quantity}</span>
