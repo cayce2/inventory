@@ -61,9 +61,7 @@ export async function GET(req: NextRequest) {
               { userId: filterByUserId },
               { userId: new ObjectId(filterByUserId) },
             ],
-          }
-          console.log("Using flexible query:", JSON.stringify(query, null, 2))
-        }
+          }        }
       } catch (error) {
         console.error("Error constructing query for userId:", filterByUserId, error)
         return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
@@ -72,7 +70,6 @@ export async function GET(req: NextRequest) {
 
     // Get inventory items based on the query
     const inventory = await db.collection("inventory").find(query).toArray()
-    console.log(`Found ${inventory.length} inventory items for query:`, JSON.stringify(query, null, 2))
 
     if (inventory.length === 0) {
       console.log("No inventory items found for the query")
@@ -86,8 +83,6 @@ export async function GET(req: NextRequest) {
         const userExists = await db.collection("users").findOne({ _id: new ObjectId(filterByUserId) })
         console.log(`User with ID ${filterByUserId} exists: ${!!userExists}`)
       }
-    } else {
-      console.log("First inventory item:", JSON.stringify(inventory[0], null, 2))
     }
 
     // Get user information for each inventory item
@@ -102,7 +97,6 @@ export async function GET(req: NextRequest) {
       ),
     ]
 
-    console.log("Unique userIds found in inventory:", userIds)
 
     const users = await db
       .collection("users")
@@ -125,7 +119,6 @@ export async function GET(req: NextRequest) {
       .project({ _id: 1, name: 1, email: 1 })
       .toArray()
 
-    console.log(`Found ${users.length} users for the inventory items`)
 
     const userMap = new Map(users.map((user) => [user._id.toString(), user]))
 

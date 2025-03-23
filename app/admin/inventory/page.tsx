@@ -21,6 +21,7 @@ interface InventoryItem {
 }
 
 export default function AdminInventory() {
+  // Note: Do not log inventory data to console as it may contain sensitive information
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -32,10 +33,20 @@ export default function AdminInventory() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const userId = searchParams.get("userId")
+  
+  // Adding a ref to track if the component has already performed the initial fetch
+  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false)
 
   useEffect(() => {
-    fetchInventory()
-  }, [userId])
+    // Only fetch on mount or when userId changes, but not on every render
+    if (!hasInitiallyFetched) {
+      fetchInventory()
+      setHasInitiallyFetched(true)
+    } else if (userId) {
+      // Only refetch when userId actually changes, not on every render
+      fetchInventory()
+    }
+  }, [userId, hasInitiallyFetched])
 
   const fetchInventory = async () => {
     try {
@@ -48,30 +59,24 @@ export default function AdminInventory() {
       }
 
       const endpoint = userId ? `/api/admin/inventory?userId=${userId}` : "/api/admin/inventory"
-      console.log("Fetching inventory from:", endpoint)
-
+      
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      console.log(`Received ${response.data.length} inventory items`)
-
       if (response.data.length === 0 && userId) {
-        console.log("No inventory items found for userId:", userId)
         try {
-          const userResponse = await axios.get(`/api/admin/users/${userId}`, {
+          await axios.get(`/api/admin/users/${userId}`, {
             headers: { Authorization: `Bearer ${token}` },
           })
-          console.log("User exists:", userResponse.data.user.name)
-        } catch (error) {
-          console.error("Error checking user:", error)
+        } catch (error) {// eslint-disable-line @typescript-eslint/no-unused-vars
+          // Error checking user is caught silently
         }
       }
 
       setInventory(response.data)
       setIsLoading(false)
     } catch (error) {
-      console.error("Error fetching inventory:", error)
       if (axios.isAxiosError(error) && error.response) {
         setError(`Error: ${error.response.data.error || "Failed to fetch inventory items"}`)
       } else {
@@ -98,8 +103,7 @@ export default function AdminInventory() {
         headers: { Authorization: `Bearer ${token}` },
       })
       fetchInventory()
-    } catch (error) {
-      console.error("Error deleting item:", error)
+    } catch (error) { // eslint-disable-line @typescript-eslint/no-unused-vars
       setError("An error occurred while deleting the item")
     }
   }
