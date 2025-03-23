@@ -4,7 +4,42 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { Eye, CheckCircle, XCircle, Trash2, RefreshCcw } from "lucide-react"
+import { 
+  Eye, 
+  CheckCircle, 
+  XCircle, 
+  Trash2, 
+  RefreshCcw, 
+  Search, 
+  ArrowLeft, 
+  MoreHorizontal,
+  AlertCircle
+} from "lucide-react"
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger
+} from "@/components/ui/tabs"
+import {
+ 
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 
 interface Invoice {
   _id: string
@@ -74,11 +109,11 @@ export default function AdminInvoices() {
     (invoice) =>
       (showDeleted || !invoice.deleted) &&
       (statusFilter === "all" || invoice.status === statusFilter) &&
-      (invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.customerPhone.includes(searchTerm) ||
-        invoice.invoiceNumber.includes(searchTerm) ||
-        invoice.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.userEmail?.toLowerCase().includes(searchTerm.toLowerCase())),
+      ((invoice.customerName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (invoice.customerPhone || '').includes(searchTerm) ||
+        (invoice.invoiceNumber || '').includes(searchTerm) ||
+        (invoice.userName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (invoice.userEmail?.toLowerCase() || '').includes(searchTerm.toLowerCase())),
   )
 
   const totalAmount = filteredInvoices.reduce((sum, invoice) => sum + invoice.amount, 0)
@@ -92,11 +127,42 @@ export default function AdminInvoices() {
   if (isLoading) {
     return (
       <NavbarLayout>
-        <div className="min-h-screen bg-gray-100 p-8">
-          <h1 className="text-3xl font-bold mb-8">Admin Invoice Management</h1>
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="container mx-auto py-8 px-4">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold">Invoice Management</h1>
+            <Button variant="outline" onClick={() => router.push("/admin")}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Admin
+            </Button>
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-32" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-8 w-48" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </NavbarLayout>
     )
@@ -105,9 +171,22 @@ export default function AdminInvoices() {
   if (error) {
     return (
       <NavbarLayout>
-        <div className="min-h-screen bg-gray-100 p-8">
-          <h1 className="text-3xl font-bold mb-8">Admin Invoice Management</h1>
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>
+        <div className="container mx-auto py-8 px-4">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold">Invoice Management</h1>
+            <Button variant="outline" onClick={() => router.push("/admin")}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Admin
+            </Button>
+          </div>
+          
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center p-4 text-red-800 bg-red-50 rounded-lg">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                <p>{error}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </NavbarLayout>
     )
@@ -115,80 +194,90 @@ export default function AdminInvoices() {
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Admin Invoice Management</h1>
-          <div className="flex items-center">
-            <input
-              type="text"
-              placeholder="Search invoices or users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 border rounded-md mr-4"
-            />
-            <button
-              onClick={() => router.push("/admin")}
-              className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Back to Admin
-            </button>
+      <div className="container mx-auto py-8 px-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <h1 className="text-3xl font-bold">Invoice Management</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Search invoices or users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full md:w-64"
+              />
+            </div>
+            <Button variant="outline" onClick={() => router.push("/admin")}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Invoice Statistics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <p className="text-sm text-gray-600">Total Amount</p>
-              <p className="text-2xl font-bold text-blue-600">${totalAmount.toFixed(2)}</p>
-            </div>
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <p className="text-sm text-gray-600">Paid Amount</p>
-              <p className="text-2xl font-bold text-green-600">${paidAmount.toFixed(2)}</p>
-            </div>
-            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-              <p className="text-sm text-gray-600">Unpaid Amount</p>
-              <p className="text-2xl font-bold text-red-600">${unpaidAmount.toFixed(2)}</p>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="overflow-hidden border-l-4 border-l-blue-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Total Amount</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-blue-600">${totalAmount.toFixed(2)}</p>
+              <p className="text-sm text-gray-500 mt-1">{filteredInvoices.length} invoices</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="overflow-hidden border-l-4 border-l-green-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Paid Amount</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-600">${paidAmount.toFixed(2)}</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {filteredInvoices.filter(i => i.status === "paid").length} invoices
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card className="overflow-hidden border-l-4 border-l-red-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Unpaid Amount</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-red-600">${unpaidAmount.toFixed(2)}</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {filteredInvoices.filter(i => i.status === "unpaid").length} invoices
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div>
-              <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                Status Filter
-              </label>
-              <select
-                id="statusFilter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-              >
-                <option value="all">All</option>
-                <option value="paid">Paid</option>
-                <option value="unpaid">Unpaid</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <label className="inline-flex items-center">
-                <input
-                  type="checkbox"
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+              <Tabs defaultValue={statusFilter} onValueChange={setStatusFilter} className="w-full md:w-auto">
+                <TabsList>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="paid">Paid</TabsTrigger>
+                  <TabsTrigger value="unpaid">Unpaid</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="show-deleted" 
                   checked={showDeleted}
-                  onChange={(e) => setShowDeleted(e.target.checked)}
-                  className="form-checkbox h-5 w-5 text-blue-600"
+                  onCheckedChange={setShowDeleted}
                 />
-                <span className="ml-2 text-gray-700">Show deleted invoices</span>
-              </label>
+                <label htmlFor="show-deleted" className="text-sm font-medium">
+                  Show deleted invoices
+                </label>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          </CardHeader>
+          
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Invoice #
                   </th>
@@ -212,86 +301,105 @@ export default function AdminInvoices() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredInvoices.map((invoice) => (
-                  <tr key={invoice._id} className={invoice.deleted ? "bg-gray-100" : ""}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {invoice.invoiceNumber}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{invoice.customerName}</div>
-                      <div className="text-sm text-gray-500">{invoice.customerPhone}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${invoice.amount.toFixed(2)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(invoice.dueDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 rounded ${
-                          invoice.status === "paid" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"
-                        }`}
-                      >
-                        {invoice.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{invoice.userName || "Unknown"}</div>
-                      <div className="text-sm text-gray-500">{invoice.userEmail || "Unknown"}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {!invoice.deleted ? (
-                        <>
-                          <button
-                            onClick={() => router.push(`/admin/invoices/${invoice._id}`)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                            title="View Details"
+              <tbody className="divide-y divide-gray-200">
+                {filteredInvoices.length > 0 ? (
+                  filteredInvoices.map((invoice) => (
+                    <tr 
+                      key={invoice._id} 
+                      className={`transition-colors hover:bg-gray-50 ${invoice.deleted ? "bg-gray-50" : ""}`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {invoice.invoiceNumber}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium">{invoice.customerName}</div>
+                        <div className="text-sm text-gray-500">{invoice.customerPhone}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        ${invoice.amount.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {new Date(invoice.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant={invoice.status === "paid" ? "success" : "destructive"}>
+                          {invoice.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium">{invoice.userName || "Unknown"}</div>
+                        <div className="text-sm text-gray-500">{invoice.userEmail || "Unknown"}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {!invoice.deleted ? (
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => router.push(`/admin/invoices/${invoice._id}`)}
+                              title="View Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => 
+                                  handleInvoiceAction(invoice._id, invoice.status === "paid" ? "markUnpaid" : "markPaid")
+                                }>
+                                  {invoice.status === "paid" ? (
+                                    <>
+                                      <XCircle className="h-4 w-4 mr-2 text-yellow-500" />
+                                      <span>Mark as Unpaid</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                                      <span>Mark as Paid</span>
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleInvoiceAction(invoice._id, "delete")}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  <span>Delete Invoice</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ) : (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleInvoiceAction(invoice._id, "restore")}
+                            className="text-blue-600"
                           >
-                            <Eye className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleInvoiceAction(invoice._id, invoice.status === "paid" ? "markUnpaid" : "markPaid")
-                            }
-                            className={`mr-3 ${
-                              invoice.status === "paid"
-                                ? "text-yellow-600 hover:text-yellow-900"
-                                : "text-green-600 hover:text-green-900"
-                            }`}
-                            title={invoice.status === "paid" ? "Mark as Unpaid" : "Mark as Paid"}
-                          >
-                            {invoice.status === "paid" ? (
-                              <XCircle className="h-5 w-5" />
-                            ) : (
-                              <CheckCircle className="h-5 w-5" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleInvoiceAction(invoice._id, "delete")}
-                            className="text-red-600 hover:text-red-900"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleInvoiceAction(invoice._id, "restore")}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Restore Invoice"
-                        >
-                          <RefreshCcw className="h-5 w-5" />
-                        </button>
-                      )}
+                            <RefreshCcw className="h-4 w-4 mr-2" />
+                            Restore
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                      No invoices found matching your criteria.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </div>
     </NavbarLayout>
   )
 }
-
