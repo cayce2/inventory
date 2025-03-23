@@ -14,11 +14,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const filterByUserId = url.searchParams.get("userId")
 
-    // Add more detailed logging to help diagnose the issue
-    console.log("Query parameters:", url.searchParams.toString())
-    if (filterByUserId) {
-      console.log("Filtering by userId:", filterByUserId)
-    }
+    console.log("Request URL:", req.url)
+    console.log("Filter by userId:", filterByUserId)
 
     const client = await clientPromise
     const db = client.db("inventory_management")
@@ -29,40 +26,115 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Modify the query construction to ensure it works correctly
+    // Build the query based on whether we're filtering by user ID
     let query = {}
+
     if (filterByUserId) {
       try {
-        // Convert the userId to ObjectId for the query
-        query = { userId: new ObjectId(filterByUserId) }
-        console.log("Using query with ObjectId:", query)
+        // Try multiple query formats to handle different ways userId might be stored
+        // First, check if any inventory items exist for this user to understand the data structure
+        const sampleItem = await db.collection("inventory").findOne({ userId: { $exists: true } })
+        console.log(
+          "Sample inventory item with userId:",
+          sampleItem ? JSON.stringify(sampleItem, null, 2) : "No items with userId found",
+        )
+
+        if (sampleItem) {
+          console.log("Sample userId type:", typeof sampleItem.userId)
+          console.log("Sample userId value:", sampleItem.userId)
+
+          // If userId is stored as a string
+          if (typeof sampleItem.userId === "string") {
+            query = { userId: filterByUserId }
+            console.log("Using string query:", JSON.stringify(query, null, 2))
+          } else {
+            // If userId is stored as an ObjectId
+            query = { userId: new ObjectId(filterByUserId) }
+            console.log("Using ObjectId query:", JSON.stringify(query, null, 2))
+          }
+        } else {
+          // If we can't determine the format, try a more flexible query
+          query = {
+            $or: [
+              { userId: filterByUserId },
+              { userId: new ObjectId(filterByUserId) },
+              { userId: filterByUserId },
+              { userId: new ObjectId(filterByUserId) },
+            ],
+          }
+          console.log("Using flexible query:", JSON.stringify(query, null, 2))
+        }
       } catch (error) {
-        console.error("Invalid ObjectId format for userId:", filterByUserId, error)
+        console.error("Error constructing query for userId:", filterByUserId, error)
         return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
       }
     }
 
-    // After fetching inventory, log the results
+    // Get inventory items based on the query
     const inventory = await db.collection("inventory").find(query).toArray()
-    console.log(`Found ${inventory.length} inventory items for query:`, JSON.stringify(query))
+    console.log(`Found ${inventory.length} inventory items for query:`, JSON.stringify(query, null, 2))
+
     if (inventory.length === 0) {
-      console.log("No inventory items found for this query")
+      console.log("No inventory items found for the query")
+
+      // If no items found with the specific query, let's check if there are any inventory items at all
+      const totalItems = await db.collection("inventory").countDocuments()
+      console.log(`Total inventory items in database: ${totalItems}`)
+
+      // Check if the user exists
+      if (filterByUserId) {
+        const userExists = await db.collection("users").findOne({ _id: new ObjectId(filterByUserId) })
+        console.log(`User with ID ${filterByUserId} exists: ${!!userExists}`)
+      }
+    } else {
+      console.log("First inventory item:", JSON.stringify(inventory[0], null, 2))
     }
 
     // Get user information for each inventory item
-    const userIds = [...new Set(inventory.map((item) => (item.userId ? item.userId.toString() : null)).filter(Boolean))]
+    const userIds = [
+      ...new Set(
+        inventory
+          .map((item) => {
+            if (!item.userId) return null
+            return typeof item.userId === "object" ? item.userId.toString() : item.userId
+          })
+          .filter(Boolean),
+      ),
+    ]
+
+    console.log("Unique userIds found in inventory:", userIds)
 
     const users = await db
       .collection("users")
-      .find({ _id: { $in: userIds.map((id) => new ObjectId(id)) } })
+      .find({
+        $or: [
+          {
+            _id: {
+              $in: userIds.map((id) => {
+                try {
+                  return new ObjectId(id)
+                } catch {
+                  return id
+                }
+              }),
+            },
+          },
+          { _id: { $in: userIds } },
+        ],
+      })
       .project({ _id: 1, name: 1, email: 1 })
       .toArray()
+
+    console.log(`Found ${users.length} users for the inventory items`)
 
     const userMap = new Map(users.map((user) => [user._id.toString(), user]))
 
     // Add user information to inventory items
     const inventoryWithUserInfo = inventory.map((item) => {
-      const userIdStr = item.userId ? item.userId.toString() : null
+      let userIdStr = null
+      if (item.userId) {
+        userIdStr = typeof item.userId === "object" ? item.userId.toString() : item.userId
+      }
       const user = userIdStr ? userMap.get(userIdStr) : null
       return {
         ...item,

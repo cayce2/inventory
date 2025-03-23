@@ -783,10 +783,15 @@ export default function UserDetailPage() {
                           </p>
                         </div>
 
-                        {/* Update the link to include the user ID as a query parameter */}
+                        {/* Update the link to view user inventory to ensure it passes the userId correctly */}
                         <Link
                           href={`/admin/inventory?userId=${userId}`}
                           className="block text-center text-sm text-blue-600 dark:text-blue-400 hover:underline mt-5"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            console.log("Navigating to inventory with userId:", userId)
+                            router.push(`/admin/inventory?userId=${userId}`)
+                          }}
                         >
                           View user inventory
                         </Link>
