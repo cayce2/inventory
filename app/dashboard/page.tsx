@@ -42,6 +42,9 @@ interface StatCardProps {
   description?: string;
   trend?: number;
   loading: boolean;
+  bgColor: string;
+  iconBgColor: string;
+  iconColor: string;
 }
 
 export default function Dashboard() {
@@ -87,19 +90,29 @@ export default function Dashboard() {
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, description, trend, loading }: StatCardProps) => (
-    <Card className="border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+  const StatCard = ({ 
+    title, 
+    value, 
+    icon: Icon, 
+    description, 
+    trend, 
+    loading, 
+    bgColor, 
+    iconBgColor, 
+    iconColor 
+  }: StatCardProps) => (
+    <Card className={`border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${bgColor}`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="flex-1 space-y-2">
-            <p className="text-sm font-medium text-gray-500">{title}</p>
+            <p className="text-sm font-medium text-gray-700">{title}</p>
             {loading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
               <p className="text-2xl font-bold text-gray-900">{value}</p>
             )}
             {description && !loading && (
-              <p className="text-xs text-gray-500">{description}</p>
+              <p className="text-xs text-gray-600">{description}</p>
             )}
             {trend !== undefined && !loading && (
               <div className={`flex items-center text-xs ${trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -108,15 +121,13 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="p-3 rounded-full bg-gray-50">
-            <Icon className="h-5 w-5 text-gray-600" />
+          <div className={`p-3 rounded-full ${iconBgColor}`}>
+            <Icon className={`h-5 w-5 ${iconColor}`} />
           </div>
         </div>
       </CardContent>
     </Card>
   );
-
-
 
   return (
     <NavbarLayout>
@@ -179,6 +190,9 @@ export default function Dashboard() {
                 description="Total items tracked in inventory"
                 trend={2.5}
                 loading={loading}
+                bgColor="bg-blue-50"
+                iconBgColor="bg-blue-100"
+                iconColor="text-blue-600"
               />
             </motion.div>
             <motion.div
@@ -193,6 +207,9 @@ export default function Dashboard() {
                 icon={AlertTriangle}
                 trend={-1.8}
                 loading={loading}
+                bgColor="bg-amber-50"
+                iconBgColor="bg-amber-100"
+                iconColor="text-amber-600"
               />
             </motion.div>
             <motion.div
@@ -210,6 +227,9 @@ export default function Dashboard() {
                 icon={DollarSign}
                 trend={4.2}
                 loading={loading}
+                bgColor="bg-green-50"
+                iconBgColor="bg-green-100"
+                iconColor="text-green-600"
               />
             </motion.div>
             <motion.div
@@ -224,6 +244,9 @@ export default function Dashboard() {
                 icon={FileText}
                 trend={-0.7}
                 loading={loading}
+                bgColor="bg-purple-50"
+                iconBgColor="bg-purple-100"
+                iconColor="text-purple-600"
               />
             </motion.div>
           </div>
