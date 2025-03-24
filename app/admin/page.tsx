@@ -71,7 +71,7 @@ export default function AdminDashboard() {
       filtered = filtered.filter(user => 
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.phone.toLowerCase().includes(searchTerm.toLowerCase())
+        user.phone?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
