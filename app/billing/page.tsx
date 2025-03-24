@@ -42,6 +42,14 @@ interface InventoryItem {
   price: number
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function Billing() {
   const generateInvoiceNumber = () => {
     return `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -71,6 +79,8 @@ export default function Billing() {
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const currency = 'KES'; 
+
   
 
   useEffect(() => {
@@ -325,6 +335,10 @@ export default function Billing() {
     return "upcoming";
   }
 
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50">
@@ -485,7 +499,7 @@ export default function Billing() {
                                 <div className="text-gray-500 text-xs">{invoice.customerPhone}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                KES {invoice.amount.toFixed(2)}
+                                formatAmount {invoice.amount.toFixed(2)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <div className="flex items-center">
@@ -676,7 +690,7 @@ export default function Billing() {
                             <option value="">Select an item</option>
                             {inventory.map((item) => (
                               <option key={item._id} value={item._id}>
-                                {item.name} - KES {item.price.toFixed(2)} (Available: {item.quantity})
+                                {item.name} - {formatAmount(item.price)} (Available: {item.quantity})
                               </option>
                             ))}
                           </select>
@@ -718,7 +732,7 @@ export default function Billing() {
                                     Item
                                   </th>
                                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Price (KES)
+                                  Price ({currency})
                                   </th>
                                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Quantity

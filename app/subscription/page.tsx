@@ -7,11 +7,21 @@ import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
 import { CreditCard, Check, AlertCircle, Clock, Package, BarChart, MessageSquare, Shield, Database } from "lucide-react"
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
+
 export default function Subscription() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<"active" | "inactive" | "expired">("inactive")
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [paymentInitiated, setPaymentInitiated] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const currency = 'KES'; 
   const router = useRouter()
 
   useEffect(() => {
@@ -119,6 +129,11 @@ export default function Subscription() {
     { icon: <Shield className="w-5 h-5 text-indigo-500" />, text: "Enhanced security features" },
   ]
 
+  const formatAmount = (value: number) => {
+      return formatCurrency(value, currency);
+    };
+  
+
   return (
     <NavbarLayout>
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -172,7 +187,7 @@ export default function Subscription() {
                   <p className="text-sm text-gray-500">Billed monthly, cancel anytime</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-gray-900">2,000 KES</p>
+                  <p className="text-lg font-bold text-gray-900">{formatAmount(2000)}</p>
                   <p className="text-xs text-gray-500">per month</p>
                 </div>
               </div>

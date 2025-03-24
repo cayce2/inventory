@@ -39,6 +39,14 @@ const defaultNewItem = {
   lowStockThreshold: 10
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([])
@@ -58,6 +66,7 @@ export default function Inventory() {
   const [restockDialogOpen, setRestockDialogOpen] = useState(false)
   const [itemToRestock, setItemToRestock] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const currency = 'KES'; 
   const router = useRouter()
 
   useEffect(() => {
@@ -294,6 +303,10 @@ export default function Inventory() {
     }
   }
 
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -438,7 +451,7 @@ export default function Inventory() {
                             </div>
                             
                             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                              <span className="text-gray-700 font-semibold">KES {item.price.toFixed(2)}</span>
+                              <span className="text-gray-700 font-semibold">{formatAmount(item.price)}</span>
                               <span className="text-sm text-gray-500">Threshold: {item.lowStockThreshold}</span>
                             </div>
                           </div>
@@ -580,7 +593,7 @@ export default function Inventory() {
                                   <span className="font-medium text-gray-900">{item.name}</span>
                                 </div>
                               </td>
-                              <td className="p-4 font-medium">KES {item.price.toFixed(2)}</td>
+                              <td className="p-4 font-medium">{formatAmount(item.price)}</td>
                               <td className="p-4">
                                 <div className="flex items-center">
                                   <span className="font-medium mr-2">{item.quantity}</span>

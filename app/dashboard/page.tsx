@@ -47,6 +47,14 @@ interface StatCardProps {
   iconColor: string;
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalItems: 0,
@@ -57,6 +65,7 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const currency = 'KES';  
 
   const router = useRouter();
 
@@ -88,6 +97,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function that uses the current currency context
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
   };
 
   const StatCard = ({ 
@@ -219,10 +233,7 @@ export default function Dashboard() {
             >
               <StatCard
                 title="Total Revenue"  
-                value={`KES ${stats.totalIncome.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}`}
+                value={formatAmount(stats.totalIncome)}
                 description="Year-to-date revenue"
                 icon={DollarSign}
                 trend={4.2}
@@ -304,7 +315,7 @@ export default function Dashboard() {
                             stroke="#9CA3AF" 
                             tick={{ fill: '#6B7280', fontSize: 12 }}
                             axisLine={{ stroke: '#E5E7EB' }}
-                            tickFormatter={(value) => `KES ${value.toLocaleString()}`}
+                            tickFormatter={(value) => `${currency} ${value.toLocaleString()}`}
                           />
                           <Tooltip 
                             contentStyle={{ 
@@ -314,7 +325,7 @@ export default function Dashboard() {
                               border: '1px solid #E5E7EB',
                               padding: '10px'
                             }}
-                            formatter={(value: number) => [`KES ${value.toLocaleString()}`, 'Revenue']}
+                            formatter={(value: number) => [formatAmount(value), 'Revenue']}
                           />
                           <Area 
                             type="monotone" 
