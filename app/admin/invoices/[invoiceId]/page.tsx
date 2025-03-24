@@ -8,8 +8,6 @@ import NavbarLayout from "@/components/NavbarLayout"
 import { 
   ArrowLeft, 
   Printer, 
-  Phone, 
-  FileText, 
   Clock, 
   Check, 
   X,
@@ -21,10 +19,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
 
+// Interface definitions
 interface InvoiceItem {
   itemId: string
   quantity: number
@@ -93,19 +92,93 @@ export default function AdminInvoiceDetail() {
     window.print()
   }
 
-  const handleDownload = () => {
-    // PDF download functionality would be implemented here
-    alert("Download PDF functionality would be implemented here")
+  const handleDownload = async () => {
+    if (!invoice) return;
+
+    try {
+      // Create a new jsPDF instance
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Select the invoice details container
+      const printContainer = document.querySelector('.print-container');
+      
+      if (printContainer) {
+        // Use html2canvas to convert the container to a canvas
+        const canvas = await html2canvas(printContainer as HTMLElement, {
+          scale: 2,
+          useCORS: true
+        });
+
+        // Convert canvas to image
+        const imgData = canvas.toDataURL('image/png');
+        
+        // Get PDF page dimensions
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+
+        // Calculate image dimensions to fit the page
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // Add the image to the PDF
+        doc.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+        // Save the PDF
+        doc.save(`Invoice_${invoice.invoiceNumber}.pdf`);
+      }
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    }
   }
 
-  const handleShare = () => {
-    // Share functionality would be implemented here
-    alert("Share functionality would be implemented here")
+  const handleShare = async () => {
+    if (!invoice) return;
+
+    try {
+      // Check if Web Share API is supported
+      if (navigator.share) {
+        await navigator.share({
+          title: `Invoice #${invoice.invoiceNumber}`,
+          text: `Invoice for ${invoice.customerName} - Total: ${formatCurrency(invoice.amount)}`,
+          // Note: In a real app, you'd generate a shareable link here
+          url: window.location.href
+        });
+      } else {
+        // Fallback for browsers not supporting Web Share API
+        // Could copy to clipboard or show a modal with share options
+        await navigator.clipboard.writeText(
+          `Invoice #${invoice.invoiceNumber} for ${invoice.customerName}\n` +
+          `Total Amount: ${formatCurrency(invoice.amount)}\n` +
+          `View at: ${window.location.href}`
+        );
+        alert("Invoice details copied to clipboard");
+      }
+    } catch (error) {
+      console.error("Error sharing invoice:", error);
+      alert("Failed to share invoice. Please try again.");
+    }
   }
 
   const handleEmail = () => {
-    // Email functionality would be implemented here
-    alert("Email functionality would be implemented here")
+    if (!invoice) return;
+
+    // Open default email client with pre-filled details
+    const subject = encodeURIComponent(`Invoice #${invoice.invoiceNumber}`);
+    const body = encodeURIComponent(
+      `Invoice Details:\n` +
+      `Invoice Number: ${invoice.invoiceNumber}\n` +
+      `Customer: ${invoice.customerName}\n` +
+      `Total Amount: ${formatCurrency(invoice.amount)}\n` +
+      `Status: ${invoice.status.toUpperCase()}\n\n` +
+      `View full invoice at: ${window.location.href}`
+    );
+
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   }
 
   const formatDate = (dateString: string) => {
@@ -130,6 +203,11 @@ export default function AdminInvoiceDetail() {
     return diffDays
   }
 
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
+  // Loading state
   if (isLoading) {
     return (
       <NavbarLayout>
@@ -156,6 +234,7 @@ export default function AdminInvoiceDetail() {
     )
   }
 
+  // Error state
   if (error || !invoice) {
     return (
       <NavbarLayout>
@@ -182,250 +261,200 @@ export default function AdminInvoiceDetail() {
 
   const daysRemaining = getDaysRemaining(invoice.dueDate)
 
-  const formatAmount = (value: number) => {
-    return formatCurrency(value, currency);
-  };
-  
   return (
-    <NavbarLayout>
-      <div className="container mx-auto py-8 px-4 max-w-5xl print:px-0">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold tracking-tight">Invoice #{invoice.invoiceNumber}</h1>
-              {invoice.status === "paid" ? (
-                <Badge className="ml-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none">
-                  <Check className="mr-1 h-3.5 w-3.5" />
-                  PAID
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200 border-none">
-                  <Clock className="mr-1 h-3.5 w-3.5" />
-                  UNPAID
-                </Badge>
-              )}
-            </div>
-            <p className="text-gray-500 mt-1">Created on {formatDate(invoice.createdAt)}</p>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="outline" onClick={() => router.push("/admin/invoices")}>
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Back to Invoices</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="outline" onClick={handleEmail}>
-                    <Mail className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Email Invoice</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="outline" onClick={handleShare}>
-                    <Share2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Share Invoice</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="outline" onClick={handleDownload}>
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Download PDF</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <Button size="sm" variant="default" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
-          </div>
-        </div>
+    <>
+      {/* Print-specific styles */}
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .print-container, 
+          .print-container * {
+            visibility: visible;
+          }
+          .print-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            font-size: 12px;
+          }
+          .print-hide {
+            display: none !important;
+          }
+          .print-container .card {
+            box-shadow: none !important;
+            border: 1px solid #e5e7eb !important;
+          }
+        }
+      `}</style>
 
-        <Card className="mb-8 shadow-sm overflow-hidden border-gray-200">
-          <div className="p-0">
-            {/* Header Banner */}
-            <div className={`p-6 ${getStatusColor(invoice.status)} border-b`}>
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                <div className="flex items-center">
-                  <div className="bg-white p-2 rounded-full">
-                    <FileText className="h-6 w-6 text-gray-700" />
-                  </div>
-                  <div className="ml-4">
+      <NavbarLayout>
+        <div className="container mx-auto py-8 px-4 max-w-5xl print:px-0 print-container">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 print-hide">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">Invoice #{invoice.invoiceNumber}</h1>
+                {invoice.status === "paid" ? (
+                  <Badge className="ml-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none">
+                    <Check className="mr-1 h-3.5 w-3.5" />
+                    PAID
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200 border-none">
+                    <Clock className="mr-1 h-3.5 w-3.5" />
+                    UNPAID
+                  </Badge>
+                )}
+              </div>
+              <p className="text-gray-500 mt-1">Created on {formatDate(invoice.createdAt)}</p>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={() => router.push("/admin/invoices")}>
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Back to Invoices</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={handleEmail}>
+                      <Mail className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Email Invoice</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={handleShare}>
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Share Invoice</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={handleDownload}>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Download PDF</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <Button size="sm" variant="default" onClick={handlePrint}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </Button>
+            </div>
+          </div>
+
+          <Card className="mb-8 shadow-sm overflow-hidden border-gray-200">
+            <div className="p-0">
+              {/* Header Banner */}
+              <div className={`p-4 ${getStatusColor(invoice.status)} border-b`}>
+                <div className="flex justify-between items-center">
+                  <div>
                     <h2 className="text-lg font-medium">Invoice #{invoice.invoiceNumber}</h2>
                     <p className="text-sm opacity-80">
                       {invoice.status === "paid" ? "Paid on " + formatDate(invoice.dueDate) : `Due in ${daysRemaining} days`}
                     </p>
                   </div>
-                </div>
-                <div className="mt-4 md:mt-0 flex items-center">
                   <div className="text-right">
                     <p className="text-sm opacity-80">Total Amount</p>
-                    <p className="text-2xl font-bold">{formatAmount(invoice.amount)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 md:p-8">
-              {/* Customer and Invoice Info Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Customer Info Card */}
-                <Card className="border shadow-none bg-gray-50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-600">Customer</h3>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10 bg-blue-100 text-blue-800">
-                        <AvatarFallback>{invoice.customerName.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-gray-900">{invoice.customerName}</p>
-                        <div className="flex items-center mt-1 text-sm text-gray-500">
-                          <Phone className="h-3.5 w-3.5 mr-1.5" />
-                          {invoice.customerPhone}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Invoice Details Card */}
-                <Card className="border shadow-none bg-gray-50">
-                  <CardContent className="p-4">
-                    <h3 className="text-sm font-medium text-gray-600 mb-3">Invoice Details</h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">Invoice Date:</div>
-                      <div className="font-medium text-gray-900">{formatDate(invoice.createdAt)}</div>
-                      
-                      <div className="text-gray-500">Due Date:</div>
-                      <div className="font-medium text-gray-900">{formatDate(invoice.dueDate)}</div>
-                      
-                      <div className="text-gray-500">Status:</div>
-                      <div>
-                        {invoice.status === "paid" ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                            Paid
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                            Unpaid
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="text-gray-500">Created By:</div>
-                      <div className="font-medium text-gray-900">{invoice.userName || "Unknown"}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Items Table */}
-              <div className="mb-8">
-                <h3 className="text-lg font-medium mb-4">Invoice Items</h3>
-                <div className="bg-gray-50 rounded-lg border overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead>
-                        <tr className="bg-gray-100">
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Item
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Quantity
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Price
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoice.items.map((item, index) => (
-                          <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {item.name || "Unknown Item"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                              {item.quantity}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                              {item.price ? formatAmount(item.price) : "N/A"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium text-right">
-                              {formatAmount((item.price || 0) * item.quantity)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <p className="text-xl font-bold">{formatAmount(invoice.amount)}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Summary & Totals */}
-              <div className="flex justify-end mb-8">
-                <div className="w-full max-w-xs bg-gray-50 p-4 rounded-lg border">
-                  <h3 className="text-sm font-medium text-gray-600 mb-3">Summary</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between py-1">
-                      <span className="text-sm text-gray-500">Subtotal</span>
-                      <span className="text-sm font-medium">{formatAmount(invoice.amount)}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-sm text-gray-500">Tax</span>
-                      <span className="text-sm font-medium">{formatAmount(0)}</span>
-                    </div>
-                    <Separator className="my-2" />
-                    <div className="flex justify-between py-1">
-                      <span className="font-medium">Total Amount</span>
-                      <span className="font-bold text-lg">{formatAmount(invoice.amount)}</span>
-                    </div>
+              <div className="p-4">
+                {/* Customer and Invoice Info */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-600 mb-2">Customer</h3>
+                    <p className="font-medium">{invoice.customerName}</p>
+                    <p className="text-sm text-gray-500">{invoice.customerPhone}</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 bg-blue-100 rounded-full p-1">
-                    <FileText className="h-5 w-5 text-blue-700" />
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">Notes</h3>
-                    <p className="text-sm text-blue-700 mt-1">
-                      Thank you for your business. Please make payment by the due date.
+                  <div className="text-right">
+                    <h3 className="text-xs font-medium text-gray-600 mb-2">Invoice Details</h3>
+                    <p className="text-sm">Invoice Date: {formatDate(invoice.createdAt)}</p>
+                    <p className="text-sm">Due Date: {formatDate(invoice.dueDate)}</p>
+                    <p className="text-sm">
+                      Status: 
+                      <span className={`ml-2 ${invoice.status === "paid" ? "text-emerald-800" : "text-amber-800"}`}>
+                        {invoice.status.toUpperCase()}
+                      </span>
                     </p>
                   </div>
                 </div>
+
+                {/* Items Table */}
+                <table className="w-full text-xs mb-4">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="p-2 text-left">Item</th>
+                      <th className="p-2 text-center">Quantity</th>
+                      <th className="p-2 text-right">Price</th>
+                      <th className="p-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.items.map((item, index) => (
+                      <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                        <td className="p-2">{item.name || "Unknown Item"}</td>
+                        <td className="p-2 text-center">{item.quantity}</td>
+                        <td className="p-2 text-right">{item.price ? formatAmount(item.price) : "N/A"}</td>
+                        <td className="p-2 text-right">{formatAmount((item.price || 0) * item.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Summary */}
+                <div className="flex justify-end">
+                  <div className="w-full max-w-xs">
+                    <div className="flex justify-between py-1">
+                      <span className="text-xs text-gray-500">Subtotal</span>
+                      <span className="text-xs font-medium">{formatAmount(invoice.amount)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-xs text-gray-500">Tax</span>
+                      <span className="text-xs font-medium">{formatAmount(0)}</span>
+                    </div>
+                    <div className="border-t my-1"></div>
+                    <div className="flex justify-between py-1">
+                      <span className="font-medium">Total Amount</span>
+                      <span className="font-bold">{formatAmount(invoice.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className="mt-4 text-xs text-gray-600 italic">
+                  Thank you for your business. Please make payment by the due date.
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
-    </NavbarLayout>
+          </Card>
+        </div>
+      </NavbarLayout>
+    </>
   )
 }

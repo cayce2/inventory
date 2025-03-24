@@ -574,7 +574,7 @@ export default function UserDetailPage() {
 
                       <div className="group">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Payment Due (formatAmount)
+                          Payment Due 
                         </label>
                         <div className="relative">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -696,7 +696,7 @@ export default function UserDetailPage() {
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Payment Due</h3>
                           <p className="mt-1 text-lg font-medium text-gray-900 dark:text-white">
-                            {user.paymentDue ? `$${user.paymentDue.toFixed(2)}` : formatAmount(0)}
+                            {user.paymentDue ? formatAmount(user.paymentDue) : formatAmount(0)}
                           </p>
                         </div>
 
