@@ -20,6 +20,14 @@ interface InventoryItem {
   userEmail?: string
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function AdminInventory() {
   // Note: Do not log inventory data to console as it may contain sensitive information
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -33,6 +41,7 @@ export default function AdminInventory() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const userId = searchParams.get("userId")
+  const currency = "KES" 
   
   // Adding a ref to track if the component has already performed the initial fetch
   const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false)
@@ -194,6 +203,10 @@ export default function AdminInventory() {
     )
   }
 
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50 p-6">
@@ -288,7 +301,7 @@ export default function AdminInventory() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Total Value</p>
                   <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                    ${inventory.reduce((total, item) => total + item.price * item.quantity, 0).toFixed(2)}
+                    {formatAmount(inventory.reduce((total, item) => total + item.price * item.quantity, 0))}
                   </h3>
                 </div>
               </div>
@@ -410,10 +423,10 @@ export default function AdminInventory() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                          ${item.price.toFixed(2)}
+                          {formatAmount(item.price)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          {formatAmount(item.price * item.quantity)}
                         </td>
                         {!userId && (
                           <td className="px-6 py-4 whitespace-nowrap">

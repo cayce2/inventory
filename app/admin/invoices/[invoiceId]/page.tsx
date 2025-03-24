@@ -47,6 +47,14 @@ interface Invoice {
   userEmail?: string
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function AdminInvoiceDetail() {
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -54,6 +62,7 @@ export default function AdminInvoiceDetail() {
   const router = useRouter()
   const params = useParams()
   const invoiceId = params.invoiceId as string
+  const currency = "KES"
 
   useEffect(() => {
     if (invoiceId) {
@@ -172,6 +181,10 @@ export default function AdminInvoiceDetail() {
   }
 
   const daysRemaining = getDaysRemaining(invoice.dueDate)
+
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
   
   return (
     <NavbarLayout>
@@ -267,7 +280,7 @@ export default function AdminInvoiceDetail() {
                 <div className="mt-4 md:mt-0 flex items-center">
                   <div className="text-right">
                     <p className="text-sm opacity-80">Total Amount</p>
-                    <p className="text-2xl font-bold">${invoice.amount.toFixed(2)}</p>
+                    <p className="text-2xl font-bold">{formatAmount(invoice.amount)}</p>
                   </div>
                 </div>
               </div>
@@ -360,10 +373,10 @@ export default function AdminInvoiceDetail() {
                               {item.quantity}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                              ${item.price?.toFixed(2) || "N/A"}
+                              {item.price ? formatAmount(item.price) : "N/A"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium text-right">
-                              ${((item.price || 0) * item.quantity).toFixed(2)}
+                              {formatAmount((item.price || 0) * item.quantity)}
                             </td>
                           </tr>
                         ))}
@@ -380,16 +393,16 @@ export default function AdminInvoiceDetail() {
                   <div className="space-y-2">
                     <div className="flex justify-between py-1">
                       <span className="text-sm text-gray-500">Subtotal</span>
-                      <span className="text-sm font-medium">${invoice.amount.toFixed(2)}</span>
+                      <span className="text-sm font-medium">{formatAmount(invoice.amount)}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-sm text-gray-500">Tax</span>
-                      <span className="text-sm font-medium">$0.00</span>
+                      <span className="text-sm font-medium">{formatAmount(0)}</span>
                     </div>
                     <Separator className="my-2" />
                     <div className="flex justify-between py-1">
                       <span className="font-medium">Total Amount</span>
-                      <span className="font-bold text-lg">${invoice.amount.toFixed(2)}</span>
+                      <span className="font-bold text-lg">{formatAmount(invoice.amount)}</span>
                     </div>
                   </div>
                 </div>

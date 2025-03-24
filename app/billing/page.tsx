@@ -338,6 +338,7 @@ export default function Billing() {
     return formatCurrency(value, currency);
   };
 
+  
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50">

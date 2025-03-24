@@ -56,6 +56,14 @@ interface Invoice {
   userEmail?: string
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function AdminInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -63,6 +71,7 @@ export default function AdminInvoices() {
   const [searchTerm, setSearchTerm] = useState("")
   const [showDeleted, setShowDeleted] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
+  const currency = 'KES';
   const router = useRouter()
 
   useEffect(() => {
@@ -192,6 +201,10 @@ export default function AdminInvoices() {
     )
   }
 
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
   return (
     <NavbarLayout>
       <div className="container mx-auto py-8 px-4">
@@ -220,7 +233,7 @@ export default function AdminInvoices() {
               <CardTitle className="text-sm font-medium text-gray-500">Total Amount</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-blue-600">${totalAmount.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-blue-600">{formatAmount(totalAmount)}</p>
               <p className="text-sm text-gray-500 mt-1">{filteredInvoices.length} invoices</p>
             </CardContent>
           </Card>
@@ -230,7 +243,7 @@ export default function AdminInvoices() {
               <CardTitle className="text-sm font-medium text-gray-500">Paid Amount</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-green-600">${paidAmount.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-green-600">{formatAmount(paidAmount)}</p>
               <p className="text-sm text-gray-500 mt-1">
                 {filteredInvoices.filter(i => i.status === "paid").length} invoices
               </p>
@@ -242,7 +255,7 @@ export default function AdminInvoices() {
               <CardTitle className="text-sm font-medium text-gray-500">Unpaid Amount</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-red-600">${unpaidAmount.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-red-600">{formatAmount(unpaidAmount)}</p>
               <p className="text-sm text-gray-500 mt-1">
                 {filteredInvoices.filter(i => i.status === "unpaid").length} invoices
               </p>
@@ -316,7 +329,7 @@ export default function AdminInvoices() {
                         <div className="text-sm text-gray-500">{invoice.customerPhone}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        ${invoice.amount.toFixed(2)}
+                        {formatAmount(invoice.amount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {new Date(invoice.dueDate).toLocaleDateString()}
