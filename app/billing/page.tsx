@@ -499,7 +499,7 @@ export default function Billing() {
                                 <div className="text-gray-500 text-xs">{invoice.customerPhone}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                formatAmount {invoice.amount.toFixed(2)}
+                                {formatAmount (invoice.amount)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 <div className="flex items-center">
