@@ -71,6 +71,14 @@ interface UserStats {
   loginHistory: LoginHistory[]
 }
 
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 export default function UserDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -85,6 +93,7 @@ export default function UserDetailPage() {
   const [activeTab, setActiveTab] = useState("details")
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const currency = 'KES'; 
 
   const fetchUserDetails = async () => {
     try {
@@ -250,6 +259,10 @@ export default function UserDetailPage() {
       </NavbarLayout>
     )
   }
+
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
 
   return (
     <NavbarLayout>
@@ -561,7 +574,7 @@ export default function UserDetailPage() {
 
                       <div className="group">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Payment Due ($)
+                          Payment Due (formatAmount)
                         </label>
                         <div className="relative">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -683,7 +696,7 @@ export default function UserDetailPage() {
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Payment Due</h3>
                           <p className="mt-1 text-lg font-medium text-gray-900 dark:text-white">
-                            {user.paymentDue ? `$${user.paymentDue.toFixed(2)}` : "$0.00"}
+                            {user.paymentDue ? `$${user.paymentDue.toFixed(2)}` : formatAmount(0)}
                           </p>
                         </div>
 
@@ -741,7 +754,7 @@ export default function UserDetailPage() {
                                 </div>
                                 <div className="mt-2 flex justify-between items-center">
                                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    ${invoice.amount.toFixed(2)}
+                                   {formatAmount(invoice.amount)}
                                   </span>
                                   <Link
                                     href={`/admin/invoices/${invoice._id}`}
@@ -915,7 +928,7 @@ export default function UserDetailPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                    ${invoice.amount.toFixed(2)}
+                                    {formatAmount(invoice.amount)}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">

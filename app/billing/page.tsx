@@ -81,7 +81,6 @@ export default function Billing() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const currency = 'KES'; 
 
-  
 
   useEffect(() => {
     const token = localStorage.getItem("token")
