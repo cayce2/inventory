@@ -2,13 +2,15 @@ import { NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { createLowStockNotification } from "@/lib/notificationManager"
 
-// This route will be triggered daily at 9 AM (UTC)
+// Route Segment Config
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 export const maxDuration = 300 // 5 minutes max duration
 
-// Configure the cron schedule
-export const config = {
-  cron: "0 9 * * *", // Run at 9 AM every day
+// This is the new way to configure cron in Next.js
+export const revalidate = {
+  type: "cron",
+  schedule: "0 9 * * *", // Run at 9 AM every day
 }
 
 export async function GET() {
