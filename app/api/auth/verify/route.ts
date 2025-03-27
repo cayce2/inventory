@@ -22,10 +22,20 @@ export async function GET(req: Request) {
         return NextResponse.json({ valid: false, message: "User not found" }, { status: 401 })
       }
 
-      return NextResponse.json({ valid: true, email: user.email }, { status: 200 })
+      // Add cache control headers to prevent unnecessary refetches
+      const headers = new Headers()
+      headers.append("Cache-Control", "s-maxage=60, stale-while-revalidate=300")
+
+      return NextResponse.json(
+        { valid: true, email: user.email },
+        {
+          status: 200,
+          headers,
+        },
+      )
     } catch (jwtError) {
       // Handle specific JWT errors
-      if ((jwtError as Error).name === "TokenExpiredError") {
+      if ((jwtError as jwt.JsonWebTokenError).name === "TokenExpiredError") {
         return NextResponse.json({ valid: false, message: "Token expired" }, { status: 401 })
       } else {
         return NextResponse.json({ valid: false, message: "Invalid token" }, { status: 401 })
