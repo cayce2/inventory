@@ -323,7 +323,10 @@ export default function Billing() {
     });
   }
 
-  const getDueStatus = (dueDate: string) => {
+  const getDueStatus = (dueDate: string, status: "paid" | "unpaid") => {
+    // If the invoice is already paid, return "paid"
+    if (status === "paid") return "paid";
+  
     const today = new Date();
     const due = new Date(dueDate);
     const diffTime = due.getTime() - today.getTime();
@@ -332,7 +335,7 @@ export default function Billing() {
     if (diffDays < 0) return "overdue";
     if (diffDays <= 3) return "due-soon";
     return "upcoming";
-  }
+  };
 
   const formatAmount = (value: number) => {
     return formatCurrency(value, currency);
@@ -480,7 +483,7 @@ export default function Billing() {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {getFilteredInvoices().map((invoice) => {
-                          const dueStatus = getDueStatus(invoice.dueDate);
+                          const dueStatus = getDueStatus(invoice.dueDate, invoice.status);
                           
                           return (
                             <motion.tr 
@@ -502,18 +505,19 @@ export default function Billing() {
                                 {formatAmount (invoice.amount)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <div className="flex items-center">
-                                  <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                                    dueStatus === 'overdue' ? 'bg-red-500' : 
-                                    dueStatus === 'due-soon' ? 'bg-yellow-500' : 'bg-green-500'
-                                  }`}></span>
-                                  <span>
-                                    {new Date(invoice.dueDate).toLocaleDateString()}
-                                    {dueStatus === 'overdue' && (
-                                      <span className="ml-1 text-xs text-red-500 font-medium">OVERDUE</span>
-                                    )}
-                                  </span>
-                                </div>
+                              <div className="flex items-center">
+                                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                                  invoice.status === 'paid' ? 'bg-green-500' :
+                                  dueStatus === 'overdue' ? 'bg-red-500' : 
+                                  dueStatus === 'due-soon' ? 'bg-yellow-500' : 'bg-green-500'
+                                }`}></span>
+                                <span>
+                                  {new Date(invoice.dueDate).toLocaleDateString()}
+                                  {dueStatus === 'overdue' && invoice.status === 'unpaid' && (
+                                <span className="ml-1 text-xs text-red-500 font-medium">OVERDUE</span>
+                                  )}
+                                </span>
+                              </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
