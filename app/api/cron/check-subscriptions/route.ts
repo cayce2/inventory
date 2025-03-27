@@ -4,7 +4,7 @@ import { checkAndUpdateSubscriptions } from "@/lib/notificationManager"
 // Route Segment Config
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
-export const maxDuration = 300 // 5 minutes max duration
+export const maxDuration = 60 // 5 minutes max duration
 
 // This is the new way to configure cron in Next.js
 export const revalidate = {
