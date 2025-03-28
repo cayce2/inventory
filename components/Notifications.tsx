@@ -2,27 +2,15 @@
 
 import { useState, useEffect, useRef } from "react"
 import axios from "axios"
-import { 
-  BellRing, 
-  Check, 
-  XIcon, 
-  Clock, 
-  CreditCard, 
-  AlertOctagon, 
-  PackageCheck, 
-  ShieldAlert,
-} from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import { Bell, X, Check, Clock, AlertTriangle, CreditCard, Package } from "lucide-react"
 import type { Notification } from "@/lib/types"
 
-interface NotificationsProps {
+interface NotificationPopupProps {
   isOpen: boolean
   onClose: () => void
-  className?: string;
-
 }
 
-export default function NotificationPopup({ isOpen, onClose }: NotificationsProps) {
+export default function NotificationPopup({ isOpen, onClose }: NotificationPopupProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const popupRef = useRef<HTMLDivElement>(null)
@@ -127,88 +115,62 @@ export default function NotificationPopup({ isOpen, onClose }: NotificationsProp
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "subscription":
-        return <CreditCard className="h-6 w-6 text-indigo-500" />
+        return <CreditCard className="h-5 w-5 text-blue-500" />
       case "payment":
-        return <AlertOctagon className="h-6 w-6 text-orange-500" />
+        return <AlertTriangle className="h-5 w-5 text-yellow-500" />
       case "inventory":
-        return <PackageCheck className="h-6 w-6 text-emerald-500" />
-      case "security":
-        return <ShieldAlert className="h-6 w-6 text-red-500" />
+        return <Package className="h-5 w-5 text-green-500" />
       default:
-        return <BellRing className="h-6 w-6 text-gray-500" />
+        return <Bell className="h-5 w-5 text-gray-500" />
     }
   }
 
   if (!isOpen) return null
 
   return (
-    <motion.div
+    <div
       ref={popupRef}
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.2 }}
-      className="fixed right-4 top-16 w-96 bg-white rounded-xl shadow-2xl overflow-hidden z-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-lg overflow-hidden z-50 border border-gray-200"
     >
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-        <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 flex items-center">
-          <BellRing className="mr-2 h-6 w-6 text-indigo-500" />
-          Notifications
-        </h3>
+      <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 className="font-semibold text-gray-700">Notifications</h3>
         <div className="flex space-x-2">
           {notifications.some((n) => !n.isRead) && (
-            <button 
-              onClick={markAllAsRead} 
-              className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center"
-            >
-              <Check className="h-4 w-4 mr-1" />
-              Mark all read
+            <button onClick={markAllAsRead} className="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+              <Check className="h-3 w-3 mr-1" />
+              Mark all as read
             </button>
           )}
-          <button 
-            onClick={onClose} 
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <XIcon className="h-5 w-5" />
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      <div className="max-h-[32rem] overflow-y-auto">
+      <div className="max-h-96 overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center items-center p-8">
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ 
-                repeat: Infinity, 
-                duration: 1, 
-                ease: "linear" 
-              }}
-              className="h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"
-            />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
           </div>
         ) : notifications.length > 0 ? (
-          <AnimatePresence>
+          <ul className="divide-y divide-gray-100">
             {notifications.map((notification) => (
-              <motion.li
+              <li
                 key={notification._id.toString()}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className={`p-4 border-b last:border-b-0 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notification.isRead ? "bg-indigo-50 dark:bg-indigo-900/20" : ""}`}
+                className={`p-4 hover:bg-gray-50 transition-colors ${!notification.isRead ? "bg-blue-50" : ""}`}
               >
                 <div className="flex">
                   <div className="flex-shrink-0 mr-3 mt-1">{getNotificationIcon(notification.type)}</div>
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
-                      <p className={`text-sm font-medium ${!notification.isRead ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"}`}>
+                      <p className={`text-sm font-medium ${!notification.isRead ? "text-gray-900" : "text-gray-700"}`}>
                         {notification.title}
                       </p>
                       <div className="flex space-x-1">
                         {!notification.isRead && (
                           <button
                             onClick={() => markAsRead(notification._id.toString())}
-                            className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            className="text-blue-600 hover:text-blue-800"
                             title="Mark as read"
                           >
                             <Check className="h-4 w-4" />
@@ -216,34 +178,31 @@ export default function NotificationPopup({ isOpen, onClose }: NotificationsProp
                         )}
                         <button
                           onClick={() => deleteNotification(notification._id.toString())}
-                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          className="text-red-600 hover:text-red-800"
                           title="Delete notification"
                         >
-                          <XIcon className="h-4 w-4" />
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{notification.message}</p>
-                    <div className="flex items-center mt-2 text-xs text-gray-500 dark:text-gray-500">
+                    <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                    <div className="flex items-center mt-2 text-xs text-gray-500">
                       <Clock className="h-3 w-3 mr-1" />
                       {new Date(notification.createdAt).toLocaleString()}
                     </div>
                   </div>
                 </div>
-              </motion.li>
+              </li>
             ))}
-          </AnimatePresence>
+          </ul>
         ) : (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="p-8 text-center text-gray-500 dark:text-gray-400"
-          >
-            <BellRing className="h-10 w-10 mx-auto mb-2 text-indigo-400" />
-            <p className="text-sm">No notifications yet</p>
-          </motion.div>
+          <div className="p-8 text-center text-gray-500">
+            <Bell className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+            <p>No notifications yet</p>
+          </div>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
+
