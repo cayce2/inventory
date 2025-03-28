@@ -1,18 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import clientPromise from "./mongodb"
 import { ObjectId } from "mongodb"
-import nodemailer from "nodemailer"
-
-// Configure nodemailer (you'll need to set up your email service)
-const transporter = nodemailer.createTransport({
-  // Configure your email service here
-  // For example, using Gmail:
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-})
 
 export async function checkAndUpdateSubscriptions() {
   const client = await clientPromise
@@ -60,7 +47,7 @@ export async function checkAndUpdateSubscriptions() {
         },
       })
 
-      await sendRenewalReminder(user)
+      // Email sending removed
     }
   }
 
@@ -95,41 +82,9 @@ export async function checkAndUpdateSubscriptions() {
         createdAt: new Date(),
       })
 
-      await sendExpirationNotification(user)
+      // Email sending removed
     }
   }
-}
-
-async function sendExpirationNotification(user: any) {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: user.email,
-    subject: "Your InventoryPro Subscription Has Expired",
-    text: `Dear ${user.name},
-
-Your InventoryPro subscription has expired. To continue using all features, please renew your subscription.
-
-Best regards,
-The InventoryPro Team`,
-  }
-
-  await transporter.sendMail(mailOptions)
-}
-
-async function sendRenewalReminder(user: any) {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: user.email,
-    subject: "Your InventoryPro Subscription is Due for Renewal",
-    text: `Dear ${user.name},
-
-Your InventoryPro subscription will expire soon. Please renew your subscription to continue using all features.
-
-Best regards,
-The InventoryPro Team`,
-  }
-
-  await transporter.sendMail(mailOptions)
 }
 
 export async function renewSubscription(userId: string) {
@@ -159,26 +114,7 @@ export async function renewSubscription(userId: string) {
     createdAt: new Date(),
   })
 
-  const user = await db.collection("users").findOne({ _id: new ObjectId(userId) })
-  await sendRenewalConfirmation(user)
-}
-
-async function sendRenewalConfirmation(user: any) {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: user.email,
-    subject: "Your InventoryPro Subscription Has Been Renewed",
-    text: `Dear ${user.name},
-
-Your InventoryPro subscription has been successfully renewed. Your new subscription end date is ${user.subscriptionEndDate.toDateString()}.
-
-Thank you for your continued support!
-
-Best regards,
-The InventoryPro Team`,
-  }
-
-  await transporter.sendMail(mailOptions)
+  // Email sending removed
 }
 
 // Function to create a low stock notification

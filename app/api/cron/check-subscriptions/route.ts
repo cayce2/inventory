@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server"
 import { checkAndUpdateSubscriptions } from "@/lib/notificationManager"
 
-// This route will be triggered daily at midnight (UTC)
 export const dynamic = "force-dynamic"
 export const maxDuration = 60 // 5 minutes max duration
 
-// Update the export const config to use the correct format for Vercel Cron Jobs
-export const config = {
-  runtime: "edge",
-  regions: ["iad1"], // Optional: specify a single region to avoid duplicate cron executions
-}
-
-// Update the cron schedule using Vercel's format
-export const cron = "0 0 * * *" // Run at midnight every day
+// Vercel configuration
+export const runtime = "nodejs"
+export const preferredRegion = ["iad1"] // specify a single region to avoid duplicate cron executions
 
 export async function GET() {
   try {
@@ -25,4 +19,3 @@ export async function GET() {
     return NextResponse.json({ success: false, error: "Failed to check subscriptions" }, { status: 500 })
   }
 }
-
