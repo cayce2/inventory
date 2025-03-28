@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server"
 import { checkAndUpdateSubscriptions } from "@/lib/notificationManager"
 
-// Route Segment Config
+// This route will be triggered daily at midnight (UTC)
 export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
 export const maxDuration = 60 // 5 minutes max duration
 
-// This is the new way to configure cron in Next.js
-export const revalidate = {
-  type: "cron",
-  schedule: "0 0 * * *", // Run at midnight every day
+// Update the export const config to use the correct format for Vercel Cron Jobs
+export const config = {
+  runtime: "edge",
+  regions: ["iad1"], // Optional: specify a single region to avoid duplicate cron executions
 }
+
+// Update the cron schedule using Vercel's format
+export const cron = "0 0 * * *" // Run at midnight every day
 
 export async function GET() {
   try {

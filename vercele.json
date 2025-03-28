@@ -1,9 +1,0 @@
-{
-    "crons": [{
-      "paths": [
-        "/api/cron/check-subscriptions",
-        "/api/cron/check-low-stock"
-      ],
-      "schedule": "0 10 * * *"
-    }]
-  }
