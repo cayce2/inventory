@@ -257,6 +257,23 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Quick Access Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <Link href="/admin/subscription-reminders" className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="flex items-center">
+                <div className="bg-yellow-100 p-3 rounded-full mr-4">
+                  <Clock className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Subscription Reminders</h2>
+                  <p className="text-gray-600">Manage subscription reminder notifications</p>
+                </div>
+              </div>
+            </Link>
+            
+            {/* You could add more quick access cards here */}
+          </div>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div 
@@ -613,7 +630,8 @@ export default function AdminDashboard() {
                                       >
                                         {user.suspended 
                                           ? <><Check size={16} className="mr-2" /> Unsuspend User</>
-                                          : <><Ban size={16} className="mr-2" /> Suspend User</>}
+                                          : <><Ban size={16} className="mr-2" /> Suspend User</>
+                                        }
                                       </button>
                                     )}
                                   </Menu.Item>
@@ -628,135 +646,95 @@ export default function AdminDashboard() {
                 </tbody>
               </table>
             </div>
-            
-            {filteredUsers.length > 0 && (
-              <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 text-sm">
-                <div className="flex justify-between items-center">
-                  <div className="text-gray-500">
-                    Showing <span className="font-medium">{filteredUsers.length}</span> of <span className="font-medium">{users.length}</span> users
-                  </div>
-                  {filteredUsers.length !== users.length && (
-                    <button 
-                      className="text-indigo-600 hover:text-indigo-800 font-medium"
-                      onClick={() => {
-                        setSearchTerm("")
-                        setTableView("all")
-                      }}
-                    >
-                      View all users
-                    </button>
-                  )}
+          </div>
+
+          {/* Extend Subscription Modal */}
+          <Transition appear show={isExtendModalOpen} as={Fragment}>
+            <Dialog as="div" className="relative z-10" onClose={() => setIsExtendModalOpen(false)}>
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0"
+                enterTo="opacity-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100"
+                leaveTo="opacity-0"
+              >
+                <div className="fixed inset-0 bg-black bg-opacity-25" />
+              </Transition.Child>
+
+              <div className="fixed inset-0 overflow-y-auto">
+                <div className="flex min-h-full items-center justify-center p-4 text-center">
+                  <Transition.Child
+                    as={Fragment}
+                    enter="ease-out duration-300"
+                    enterFrom="opacity-0 scale-95"
+                    enterTo="opacity-100 scale-100"
+                    leave="ease-in duration-200"
+                    leaveFrom="opacity-100 scale-100"
+                    leaveTo="opacity-0 scale-95"
+                  >
+                    <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                      <Dialog.Title
+                        as="h3"
+                        className="text-lg font-medium leading-6 text-gray-900"
+                      >
+                        Extend Subscription
+                      </Dialog.Title>
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-500 mb-4">
+                          {getUser(selectedUserId)?.name && (
+                            <>Extending subscription for <span className="font-semibold">{getUser(selectedUserId)?.name}</span></>
+                          )}
+                        </p>
+                        
+                        <div className="mt-2">
+                          <label htmlFor="extensionDate" className="block text-sm font-medium text-gray-700 mb-1">
+                            New End Date
+                          </label>
+                          <input
+                            type="date"
+                            id="extensionDate"
+                            value={extensionDate}
+                            onChange={(e) => setExtensionDate(e.target.value)}
+                            className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            min={formatDateForInput(new Date())}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-6 flex justify-end space-x-3">
+                        <button
+                          type="button"
+                          className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          onClick={() => setIsExtendModalOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          onClick={handleExtendSubscription}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? (
+                            <>
+                              <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent"></span>
+                              Processing...
+                            </>
+                          ) : (
+                            "Confirm Extension"
+                          )}
+                        </button>
+                      </div>
+                    </Dialog.Panel>
+                  </Transition.Child>
                 </div>
               </div>
-            )}
-            {/* Extension Modal */}
-  <Transition appear show={isExtendModalOpen} as={Fragment}>
-    <Dialog
-      as="div"
-      className="relative z-10"
-      onClose={() => setIsExtendModalOpen(false)}
-    >
-      <Transition.Child
-        as={Fragment}
-        enter="ease-out duration-300"
-        enterFrom="opacity-0"
-        enterTo="opacity-100"
-        leave="ease-in duration-200"
-        leaveFrom="opacity-100"
-        leaveTo="opacity-0"
-      >
-        <div className="fixed inset-0 bg-black bg-opacity-25" />
-      </Transition.Child>
-
-      <div className="fixed inset-0 overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4 text-center">
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0 scale-95"
-            enterTo="opacity-100 scale-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100 scale-100"
-            leaveTo="opacity-0 scale-95"
-          >
-            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
-              <div className="flex justify-between items-start mb-4">
-                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
-                  Extend Subscription
-                </Dialog.Title>
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-gray-500"
-                  onClick={() => setIsExtendModalOpen(false)}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {selectedUserId && getUser(selectedUserId) && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                  <p className="font-medium text-gray-700">{getUser(selectedUserId)?.name}</p>
-                  <p className="text-gray-500 text-sm">{getUser(selectedUserId)?.email}</p>
-                  {getUser(selectedUserId)?.subscriptionEndDate && (
-                    <div className="mt-2 text-sm flex items-center">
-                      <Calendar size={14} className="text-gray-400 mr-2" />
-                      <span>
-                        Current end date: <span className="font-medium">
-                          {new Date(getUser(selectedUserId)?.subscriptionEndDate || "").toLocaleDateString()}
-                        </span>
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-4">
-                <label htmlFor="extension-date" className="block text-sm font-medium text-gray-700 mb-1">
-                  New Subscription End Date
-                </label>
-                <input
-                  type="date"
-                  id="extension-date"
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={extensionDate}
-                  onChange={(e) => setExtensionDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  onClick={() => setIsExtendModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  onClick={handleExtendSubscription}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    'Confirm Extension'
-                  )}
-                </button>
-              </div>
-            </Dialog.Panel>
-          </Transition.Child>
+            </Dialog>
+          </Transition>
         </div>
       </div>
-    </Dialog>
-  </Transition>
-</div>
-        </div>
-      </div>
-</NavbarLayout>
-)
+    </NavbarLayout>
+  )
 }
