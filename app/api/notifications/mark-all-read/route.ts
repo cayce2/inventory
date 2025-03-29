@@ -3,6 +3,7 @@ import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 
+// Mark all notifications as read
 export async function PUT(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
@@ -15,7 +16,7 @@ export async function PUT(req: NextRequest) {
 
     const result = await db
       .collection("notifications")
-      .updateMany({ userId: new ObjectId(userId), isRead: false }, { $set: { isRead: true } })
+      .updateMany({ userId: new ObjectId(userId), read: false }, { $set: { read: true } })
 
     return NextResponse.json(
       {
@@ -26,7 +27,7 @@ export async function PUT(req: NextRequest) {
     )
   } catch (error) {
     console.error("Error marking all notifications as read:", error)
-    return NextResponse.json({ error: "An error occurred while updating notifications" }, { status: 500 })
+    return NextResponse.json({ error: "An error occurred while marking all notifications as read" }, { status: 500 })
   }
 }
 

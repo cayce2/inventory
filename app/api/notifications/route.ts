@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { ObjectId } from "mongodb"
 
+// Get notifications for the current user
 export async function GET(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
@@ -10,14 +12,38 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Parse URL to get query parameters
+    const url = new URL(req.url)
+    const limit = Number.parseInt(url.searchParams.get("limit") || "10")
+    const unreadOnly = url.searchParams.get("unreadOnly") === "true"
+    const countOnly = url.searchParams.get("countOnly") === "true"
+
     const client = await clientPromise
     const db = client.db("inventory_management")
 
+    // Build query
+    const query: any = { userId: new ObjectId(userId) }
+    if (unreadOnly) {
+      query.read = false
+    }
+
+    // If countOnly is true, just return the count
+    if (countOnly) {
+      const total = await db.collection("notifications").countDocuments({ userId: new ObjectId(userId) })
+      const unread = await db.collection("notifications").countDocuments({
+        userId: new ObjectId(userId),
+        read: false,
+      })
+
+      return NextResponse.json({ total, unread }, { status: 200 })
+    }
+
+    // Get notifications
     const notifications = await db
       .collection("notifications")
-      .find({ userId: new ObjectId(userId) })
+      .find(query)
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(limit)
       .toArray()
 
     return NextResponse.json(notifications, { status: 200 })
@@ -27,68 +53,45 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function PUT(req: NextRequest) {
+// Create a new notification (for testing purposes)
+export async function POST(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { notificationId, isRead } = await req.json()
+    const { type, title, message, relatedItemId } = await req.json()
 
-    if (!notificationId) {
-      return NextResponse.json({ error: "Notification ID is required" }, { status: 400 })
+    if (!type || !title || !message) {
+      return NextResponse.json({ error: "Type, title, and message are required" }, { status: 400 })
     }
 
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    const result = await db
-      .collection("notifications")
-      .updateOne(
-        { _id: new ObjectId(notificationId), userId: new ObjectId(userId) },
-        { $set: { isRead: isRead === undefined ? true : isRead } },
-      )
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Notification not found" }, { status: 404 })
+    const notification = {
+      userId: new ObjectId(userId),
+      type,
+      title,
+      message,
+      read: false,
+      createdAt: new Date(),
+      ...(relatedItemId && { relatedItemId: new ObjectId(relatedItemId) }),
     }
 
-    return NextResponse.json({ message: "Notification updated successfully" }, { status: 200 })
+    const result = await db.collection("notifications").insertOne(notification)
+
+    return NextResponse.json(
+      {
+        message: "Notification created successfully",
+        notificationId: result.insertedId,
+      },
+      { status: 201 },
+    )
   } catch (error) {
-    console.error("Error updating notification:", error)
-    return NextResponse.json({ error: "An error occurred while updating the notification" }, { status: 500 })
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const userId = await authMiddleware(req)
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { notificationId } = await req.json()
-
-    if (!notificationId) {
-      return NextResponse.json({ error: "Notification ID is required" }, { status: 400 })
-    }
-
-    const client = await clientPromise
-    const db = client.db("inventory_management")
-
-    const result = await db
-      .collection("notifications")
-      .deleteOne({ _id: new ObjectId(notificationId), userId: new ObjectId(userId) })
-
-    if (result.deletedCount === 0) {
-      return NextResponse.json({ error: "Notification not found" }, { status: 404 })
-    }
-
-    return NextResponse.json({ message: "Notification deleted successfully" }, { status: 200 })
-  } catch (error) {
-    console.error("Error deleting notification:", error)
-    return NextResponse.json({ error: "An error occurred while deleting the notification" }, { status: 500 })
+    console.error("Error creating notification:", error)
+    return NextResponse.json({ error: "An error occurred while creating the notification" }, { status: 500 })
   }
 }
 
