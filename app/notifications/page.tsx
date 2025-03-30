@@ -5,7 +5,43 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { Bell, CheckCircle, Trash2, Filter, RefreshCw } from "lucide-react"
+import { 
+  Bell, 
+  CheckCircle, 
+  Trash2, 
+  RefreshCw, 
+  ShoppingCart, 
+  Package, 
+  Settings,
+  AlertCircle,
+  ArrowUpDown
+} from "lucide-react"
+import { toast } from "sonner"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 interface Notification {
   _id: string
@@ -21,8 +57,9 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
-  const [filterType, setFilterType] = useState("all")
-  const [filterRead, setFilterRead] = useState("all")
+  const [activeTab, setActiveTab] = useState("all")
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const router = useRouter()
 
   useEffect(() => {
@@ -45,15 +82,21 @@ export default function NotificationsPage() {
       })
 
       setNotifications(response.data)
+      toast.success("Notifications refreshed")
     } catch (error) {
       console.error("Error fetching notifications:", error)
       setError("An error occurred while fetching notifications")
+      toast.error("Failed to load notifications")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = async (notificationId: string, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation()
+    }
+    
     try {
       const token = localStorage.getItem("token")
       if (!token) return
@@ -72,8 +115,11 @@ export default function NotificationsPage() {
           notification._id === notificationId ? { ...notification, read: true } : notification,
         ),
       )
+      
+      toast.success("Marked as read")
     } catch (error) {
       console.error("Error marking notification as read:", error)
+      toast.error("Failed to mark as read")
     }
   }
 
@@ -92,12 +138,16 @@ export default function NotificationsPage() {
 
       // Update local state
       setNotifications(notifications.map((notification) => ({ ...notification, read: true })))
+      toast.success("All notifications marked as read")
     } catch (error) {
       console.error("Error marking all notifications as read:", error)
+      toast.error("Failed to mark all as read")
     }
   }
 
-  const deleteNotification = async (notificationId: string) => {
+  const deleteNotification = async (notificationId: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    
     try {
       const token = localStorage.getItem("token")
       if (!token) return
@@ -108,8 +158,10 @@ export default function NotificationsPage() {
 
       // Update local state
       setNotifications(notifications.filter((notification) => notification._id !== notificationId))
+      toast.success("Notification deleted")
     } catch (error) {
       console.error("Error deleting notification:", error)
+      toast.error("Failed to delete notification")
     }
   }
 
@@ -122,239 +174,313 @@ export default function NotificationsPage() {
     if (notification.type === "subscription") {
       router.push("/subscription")
     } else if (notification.type === "lowStock" && notification.relatedItemId) {
-      router.push("/inventory")
+      router.push(`/inventory/${notification.relatedItemId}`)
     }
   }
 
   const getFormattedDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleString()
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.round(diffMs / 60000)
+    const diffHours = Math.round(diffMs / 3600000)
+    const diffDays = Math.round(diffMs / 86400000)
+
+    if (diffMins < 60) {
+      return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`
+    } else if (diffHours < 24) {
+      return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`
+    } else if (diffDays < 7) {
+      return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`
+    } else {
+      return date.toLocaleDateString(undefined, { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      })
+    }
   }
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "subscription":
-        return "💰"
+        return <ShoppingCart className="h-5 w-5 text-purple-500" />
       case "lowStock":
-        return "📦"
+        return <Package className="h-5 w-5 text-amber-500" />
       default:
-        return "🔔"
+        return <Settings className="h-5 w-5 text-blue-500" />
     }
   }
 
-  const filteredNotifications = notifications.filter((notification) => {
-    // Filter by type
-    if (filterType !== "all" && notification.type !== filterType) {
-      return false
-    }
+  const filteredNotifications = notifications
+    .filter((notification) => {
+      // Filter by type
+      if (activeTab !== "all" && notification.type !== activeTab) {
+        return false
+      }
 
-    // Filter by read status
-    if (filterRead === "read" && !notification.read) {
-      return false
-    }
-    if (filterRead === "unread" && notification.read) {
-      return false
-    }
+      // Filter by read status
+      if (showUnreadOnly && notification.read) {
+        return false
+      }
 
-    return true
-  })
+      return true
+    })
+    .sort((a, b) => {
+      // Sort by date
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
+    })
+
+  const unreadCount = notifications.filter(n => !n.read).length
+  
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "subscription": return "Subscription"
+      case "lowStock": return "Low Stock"
+      case "system": return "System"
+      default: return "Unknown"
+    }
+  }
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gray-100 p-8">
-        <h1 className="text-3xl font-bold mb-8 flex items-center">
-          <Bell className="mr-3 h-8 w-8 text-blue-600" />
-          Notifications
-        </h1>
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8 dark:bg-gray-900">
+        <header className="mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="relative mr-3">
+                <Bell className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                {unreadCount > 0 && (
+                  <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0">
+                    {unreadCount}
+                  </Badge>
+                )}
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Notifications</h1>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchNotifications}
+                className="flex items-center gap-1"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span className="hidden md:inline ml-1">Refresh</span>
+              </Button>
+              
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={markAllAsRead}
+                className="flex items-center gap-1"
+                disabled={!notifications.some(n => !n.read)}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span className="hidden md:inline ml-1">Mark All Read</span>
+              </Button>
+            </div>
+          </div>
+        </header>
 
         {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-            <p>{error}</p>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
+          >
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2" />
+              <p>{error}</p>
+            </div>
+          </motion.div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <div className="flex items-center mb-4 md:mb-0">
-              <div className="mr-4">
-                <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 mb-1">
-                  Filter by Type
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Filter className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <select
-                    id="filterType"
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="subscription">Subscription</option>
-                    <option value="lowStock">Low Stock</option>
-                    <option value="system">System</option>
-                  </select>
+        <Card className="shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+              <CardTitle>Your Notifications</CardTitle>
+              
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="unread-filter" 
+                    checked={showUnreadOnly} 
+                    onCheckedChange={setShowUnreadOnly}
+                  />
+                  <Label htmlFor="unread-filter">Unread only</Label>
                 </div>
-              </div>
-
-              <div>
-                <label htmlFor="filterRead" className="block text-sm font-medium text-gray-700 mb-1">
-                  Filter by Status
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Filter className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <select
-                    id="filterRead"
-                    value={filterRead}
-                    onChange={(e) => setFilterRead(e.target.value)}
-                    className="pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="read">Read</option>
-                    <option value="unread">Unread</option>
-                  </select>
-                </div>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex items-center gap-1">
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                      <span>{sortOrder === "newest" ? "Newest first" : "Oldest first"}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setSortOrder("newest")}>
+                      Newest first
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSortOrder("oldest")}>
+                      Oldest first
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={fetchNotifications}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </button>
-
-              <button
-                onClick={markAllAsRead}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Mark All as Read
-              </button>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-          ) : filteredNotifications.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-gray-200">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Type
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Title
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Message
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Date
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Status
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredNotifications.map((notification) => (
-                      <tr
-                        key={notification._id}
-                        className={`hover:bg-gray-50 ${!notification.read ? "bg-blue-50" : ""}`}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-xl">{getNotificationIcon(notification.type)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div
-                            className={`text-sm font-medium ${!notification.read ? "text-blue-600" : "text-gray-900"} cursor-pointer`}
-                            onClick={() => handleNotificationClick(notification)}
-                          >
-                            {notification.title}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-500 max-w-md truncate">{notification.message}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">{getFormattedDate(notification.createdAt)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              notification.read ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {notification.read ? "Read" : "Unread"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          {!notification.read && (
-                            <button
-                              onClick={() => markAsRead(notification._id)}
-                              className="text-blue-600 hover:text-blue-900 mr-3"
-                            >
-                              <CheckCircle className="h-5 w-5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => deleteNotification(notification._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </td>
-                      </tr>
+          </CardHeader>
+          
+          <CardContent>
+            <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-4 mb-6">
+                <TabsTrigger value="all">
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="subscription">
+                  Subscription
+                </TabsTrigger>
+                <TabsTrigger value="lowStock">
+                  Low Stock
+                </TabsTrigger>
+                <TabsTrigger value="system">
+                  System
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value={activeTab} className="mt-0">
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <Skeleton className="h-10 w-10 rounded-full mr-4" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-1/3" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-2/3" />
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <Bell className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No notifications</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {filterType !== "all" || filterRead !== "all"
-                  ? "Try changing your filters to see more notifications."
-                  : "You don't have any notifications yet."}
-              </p>
-            </div>
-          )}
-        </div>
+                  </div>
+                ) : filteredNotifications.length > 0 ? (
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {filteredNotifications.map((notification) => (
+                        <motion.div
+                          key={notification._id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className={`
+                            p-4 rounded-lg cursor-pointer border 
+                            ${!notification.read 
+                              ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' 
+                              : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700'}
+                            hover:shadow-md transition-all duration-200
+                          `}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`p-2 rounded-full ${
+                              notification.type === 'subscription' ? 'bg-purple-100 dark:bg-purple-900/30' :
+                              notification.type === 'lowStock' ? 'bg-amber-100 dark:bg-amber-900/30' :
+                              'bg-blue-100 dark:bg-blue-900/30'
+                            }`}>
+                              {getNotificationIcon(notification.type)}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col md:flex-row md:justify-between md:items-start">
+                                <div>
+                                  <h3 className={`font-medium truncate mb-1 ${!notification.read ? 'text-blue-700 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                    {notification.title}
+                                  </h3>
+                                  <p className="text-gray-600 dark:text-gray-300 text-sm mb-2 line-clamp-2">
+                                    {notification.message}
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 md:gap-4 md:ml-4 mt-2 md:mt-0">
+                                  <Badge variant="outline" className="text-xs">
+                                    {getTypeLabel(notification.type)}
+                                  </Badge>
+                                  
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                    {getFormattedDate(notification.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {!notification.read && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                      onClick={(e) => markAsRead(notification._id, e)}
+                                    >
+                                      <CheckCircle className="h-5 w-5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Mark as read</TooltipContent>
+                                </Tooltip>
+                              )}
+                              
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                    onClick={(e) => deleteNotification(notification._id, e)}
+                                  >
+                                    <Trash2 className="h-5 w-5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg dark:bg-gray-800/50">
+                    <Bell className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                    <h3 className="mt-4 text-base font-medium text-gray-900 dark:text-gray-200">No notifications</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {activeTab !== "all" || showUnreadOnly
+                        ? "Try changing your filters to see more notifications."
+                        : "You don't have any notifications yet."}
+                    </p>
+                    {activeTab !== "all" || showUnreadOnly ? (
+                      <Button
+                        variant="outline" 
+                        size="sm"
+                        className="mt-4"
+                        onClick={() => {
+                          setActiveTab("all");
+                          setShowUnreadOnly(false);
+                        }}
+                      >
+                        Reset filters
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </NavbarLayout>
   )
 }
-

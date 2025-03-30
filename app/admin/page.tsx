@@ -21,7 +21,9 @@ import {
   Users,
   Mail,
   ChevronDown,
-  MoreHorizontal
+  MoreHorizontal,
+  ArrowUpRight,
+  Filter
 } from "lucide-react"
 import { Dialog, Transition, Menu } from "@headlessui/react"
 
@@ -226,7 +228,7 @@ export default function AdminDashboard() {
             <div className="mt-4 md:mt-0 flex space-x-3">
               <button
                 onClick={() => fetchUsers()}
-                className="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 shadow-sm flex items-center transition-all"
+                className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 shadow-sm flex items-center transition-all"
               >
                 <RefreshCcw size={16} className="mr-2" />
                 Refresh
@@ -321,25 +323,25 @@ export default function AdminDashboard() {
           </div>
 
           {/* Progress Tracker */}
-          <div className="mb-8">
+          <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-900">Deployment Progress</h2>
               <div className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
                 {Math.round(calculateProgress())}% Complete
               </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div>
               <div className="flex justify-between mb-2">
                 <div className="text-sm font-medium text-gray-500">Target: 100 users</div>
                 <div className="text-sm font-medium text-indigo-600">{users.filter((user) => !user.suspended).length} Users</div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
-                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500" 
+                  className="bg-indigo-600 h-3 rounded-full transition-all duration-500" 
                   style={{ width: `${calculateProgress()}%` }}
                 ></div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <span className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
                   <UserCheck size={14} className="mr-1 text-indigo-500" />
                   {users.filter((user) => !user.suspended).length} Active
@@ -383,6 +385,7 @@ export default function AdminDashboard() {
                   
                   <Menu as="div" className="relative inline-block text-left">
                     <Menu.Button className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 shadow-sm flex items-center justify-center transition-colors">
+                      <Filter size={16} className="mr-2" />
                       <span>Filters</span>
                       <ChevronDown size={16} className="ml-2" />
                     </Menu.Button>
@@ -488,20 +491,26 @@ export default function AdminDashboard() {
                 <tbody className="divide-y divide-gray-200">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center">
-                        <div className="flex flex-col items-center">
-                          <Search size={36} className="text-gray-300 mb-3" />
-                          <p className="text-gray-500 font-medium">
+                      <td colSpan={7} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center bg-gray-50 py-8 px-4 rounded-lg">
+                          <Search size={40} className="text-gray-300 mb-4" />
+                          <p className="text-gray-700 font-medium text-lg mb-2">
                             {searchTerm ? "No users match your search" : "No users found for the selected filter"}
                           </p>
+                          <p className="text-gray-500 mb-4 max-w-md text-center">
+                            {searchTerm 
+                              ? "Try adjusting your search term or clearing filters to see more results." 
+                              : "Try selecting a different filter option to view other users."}
+                          </p>
                           <button 
-                            className="mt-3 text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                            className="mt-1 text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center"
                             onClick={() => {
                               setSearchTerm("")
                               setTableView("all")
                             }}
                           >
-                            Clear filters
+                            <RefreshCcw size={14} className="mr-1" />
+                            Clear all filters
                           </button>
                         </div>
                       </td>
@@ -558,166 +567,184 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <Menu as="div" className="relative inline-block text-left">
-                            <div>
-                              <Menu.Button className="inline-flex justify-center p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100">
-                                <MoreHorizontal size={18} />
-                              </Menu.Button>
-                            </div>
-                            <Transition
-                              as={Fragment}
-                              enter="transition ease-out duration-100"
-                              enterFrom="transform opacity-0 scale-95"
-                              enterTo="transform opacity-100 scale-100"
-                              leave="transition ease-in duration-75"
-                              leaveFrom="transform opacity-100 scale-100"
-                              leaveTo="transform opacity-0 scale-95"
+                          <div className="flex items-center justify-end space-x-2">
+                            <Link
+                              href={`/admin/users/${user._id}`}
+                              className="text-gray-500 hover:text-indigo-600 p-1 rounded-full hover:bg-indigo-50 transition-colors"
                             >
-                              <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                                <div className="py-1">
-                                  <Menu.Item>
-                                    {({ active }) => (
-                                      <Link 
-                                        href={`/admin/users/${user._id}`}
-                                        className={`${
-                                          active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
-                                        } flex px-4 py-2 text-sm items-center`}
-                                      >
-                                        <Eye size={16} className="mr-2" />
-                                        View Details
-                                      </Link>
-                                    )}
-                                  </Menu.Item>
-                                  <Menu.Item>
-                                    {({ active }) => (
-                                      <button
-                                        className={`${
-                                          active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
-                                        } flex px-4 py-2 text-sm w-full items-center`}
-                                        onClick={() => openExtendModal(user._id)}
-                                        disabled={actionLoading}
-                                      >
-                                        <Calendar size={16} className="mr-2" />
-                                        Extend Subscription
-                                      </button>
-                                    )}
-                                  </Menu.Item>
-                                  <Menu.Item>
-                                    {({ active }) => (
-                                      <button
+                              <Eye size={18} />
+                            </Link>
+                            
+                            <button
+                              className="text-gray-500 hover:text-indigo-600 p-1 rounded-full hover:bg-indigo-50 transition-colors"
+                              onClick={() => openExtendModal(user._id)}
+                              disabled={actionLoading}
+                            >
+                              <Calendar size={18} />
+                            </button>
+                            
+                            <Menu as="div" className="relative inline-block text-left">
+                              <div>
+                                <Menu.Button className="p-1 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-indigo-50 transition-colors">
+                                  <MoreHorizontal size={18} />
+                                </Menu.Button>
+                              </div>
+                              <Transition
+                                as={Fragment}
+                                enter="transition ease-out duration-100"
+                                enterFrom="transform opacity-0 scale-95"
+                                enterTo="transform opacity-100 scale-100"
+                                leave="transition ease-in duration-75"
+                                leaveFrom="transform opacity-100 scale-100"
+                                leaveTo="transform opacity-0 scale-95"
+                              >
+                                <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                  <div className="py-1">
+                                    <Menu.Item>
+                                      {({ active }) => (
+                                        <Link 
+                                          href={`/admin/users/${user._id}`}
+                                          className={`${
+                                            active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
+                                          } flex px-4 py-2 text-sm items-center justify-between`}
+                                        >
+                                          <span className="flex items-center">
+                                            <Eye size={16} className="mr-2" />
+                                            View Details
+                                          </span>
+                                          <ArrowUpRight size={14} />
+                                        </Link>
+                                      )}
+                                    </Menu.Item>
+                                    <Menu.Item>
+                                      {({ active }) => (
+                                        <button
+                                          className={`${
+                                            active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
+                                          } flex px-4 py-2 text-sm w-full items-center`}
+                                          onClick={() => openExtendModal(user._id)}
+                                          disabled={actionLoading}
+                                        >
+                                          <Calendar size={16} className="mr-2" />
+                                          Extend Subscription
+                                        </button>
+                                      )}
+                                    </Menu.Item>
+                                    <Menu.Item>
+                                      {({ active }) => (
+                                        <button
                                         className={`${
                                           active ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
                                         } flex px-4 py-2 text-sm w-full items-center`}
                                         onClick={() => handleUserAction(user._id, user.suspended ? "unsuspend" : "suspend")}
                                         disabled={actionLoading}
                                       >
-                                        {user.suspended 
-                                          ? <><Check size={16} className="mr-2" /> Unsuspend User</>
-                                          : <><Ban size={16} className="mr-2" /> Suspend User</>
-                                        }
+                                        <Ban size={16} className="mr-2" />
+                                        {user.suspended ? "Unsuspend User" : "Suspend User"}
                                       </button>
-                                    )}
-                                  </Menu.Item>
-                                </div>
-                              </Menu.Items>
-                            </Transition>
-                          </Menu>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                                      )}
+                                      </Menu.Item>
+                                    </div>
+                                  </Menu.Items>
+                                </Transition>
+                              </Menu>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-
-          {/* Extend Subscription Modal */}
-          <Transition appear show={isExtendModalOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-10" onClose={() => setIsExtendModalOpen(false)}>
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0"
-                enterTo="opacity-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
-              >
-                <div className="fixed inset-0 bg-black bg-opacity-25" />
-              </Transition.Child>
-
-              <div className="fixed inset-0 overflow-y-auto">
-                <div className="flex min-h-full items-center justify-center p-4 text-center">
-                  <Transition.Child
-                    as={Fragment}
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0 scale-95"
-                    enterTo="opacity-100 scale-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100 scale-100"
-                    leaveTo="opacity-0 scale-95"
-                  >
-                    <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                      <Dialog.Title
-                        as="h3"
-                        className="text-lg font-medium leading-6 text-gray-900"
-                      >
-                        Extend Subscription
-                      </Dialog.Title>
-                      <div className="mt-4">
+        </div>
+  
+        {/* Extension Modal */}
+        <Transition appear show={isExtendModalOpen} as={Fragment}>
+          <Dialog as="div" className="relative z-10" onClose={() => setIsExtendModalOpen(false)}>
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <div className="fixed inset-0 bg-black bg-opacity-25" />
+            </Transition.Child>
+  
+            <div className="fixed inset-0 overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4 text-center">
+                <Transition.Child
+                  as={Fragment}
+                  enter="ease-out duration-300"
+                  enterFrom="opacity-0 scale-95"
+                  enterTo="opacity-100 scale-100"
+                  leave="ease-in duration-200"
+                  leaveFrom="opacity-100 scale-100"
+                  leaveTo="opacity-0 scale-95"
+                >
+                  <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                    <Dialog.Title
+                      as="h3"
+                      className="text-lg font-medium leading-6 text-gray-900"
+                    >
+                      Extend Subscription
+                    </Dialog.Title>
+                    
+                    {selectedUserId && (
+                      <div className="mt-3">
                         <p className="text-sm text-gray-500 mb-4">
-                          {getUser(selectedUserId)?.name && (
-                            <>Extending subscription for <span className="font-semibold">{getUser(selectedUserId)?.name}</span></>
-                          )}
+                          Extending subscription for <span className="font-medium text-gray-700">{getUser(selectedUserId)?.name}</span>
                         </p>
                         
-                        <div className="mt-2">
-                          <label htmlFor="extensionDate" className="block text-sm font-medium text-gray-700 mb-1">
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             New End Date
                           </label>
                           <input
                             type="date"
-                            id="extensionDate"
                             value={extensionDate}
                             onChange={(e) => setExtensionDate(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full rounded-md border border-gray-300 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                             min={formatDateForInput(new Date())}
                           />
                         </div>
                       </div>
-
-                      <div className="mt-6 flex justify-end space-x-3">
-                        <button
-                          type="button"
-                          className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          onClick={() => setIsExtendModalOpen(false)}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          onClick={handleExtendSubscription}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? (
-                            <>
-                              <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent"></span>
-                              Processing...
-                            </>
-                          ) : (
-                            "Confirm Extension"
-                          )}
-                        </button>
-                      </div>
-                    </Dialog.Panel>
-                  </Transition.Child>
-                </div>
+                    )}
+  
+                    <div className="mt-6 flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        onClick={() => setIsExtendModalOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        onClick={handleExtendSubscription}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          "Confirm Extension"
+                        )}
+                      </button>
+                    </div>
+                  </Dialog.Panel>
+                </Transition.Child>
               </div>
-            </Dialog>
-          </Transition>
-        </div>
-      </div>
-    </NavbarLayout>
-  )
-}
+            </div>
+          </Dialog>
+        </Transition>
+      </NavbarLayout>
+    );
+  }
