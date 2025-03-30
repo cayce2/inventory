@@ -378,7 +378,7 @@ export default function NotificationsPage() {
                         <h3 className="text-sm font-medium">Sort Order</h3>
                         <RadioGroup 
                           value={sortOrder}
-                          onValueChange={(value) => setSortOrder(value as "newest" | "oldest")}
+                          onValueChange={(value: string) => setSortOrder(value as "newest" | "oldest")}
                         >
                           <div className="flex items-center space-x-2">
                             <RadioGroupItem value="newest" id="sort-newest" />
