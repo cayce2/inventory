@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -246,6 +246,7 @@ export default function NotificationsPage() {
 
   return (
     <NavbarLayout>
+       <TooltipProvider>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 dark:bg-gray-900">
         <header className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
@@ -481,6 +482,7 @@ export default function NotificationsPage() {
           </CardContent>
         </Card>
       </div>
+      </TooltipProvider>
     </NavbarLayout>
   )
 }
