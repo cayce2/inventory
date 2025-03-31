@@ -30,6 +30,7 @@ import {
   Search,
   Filter,
   Download,
+  Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
@@ -71,14 +72,6 @@ interface UserStats {
   loginHistory: LoginHistory[]
 }
 
-// Currency formatting utility function
-const formatCurrency = (value: number, currencyCode = 'KES') => {
-  return `${currencyCode} ${value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}`;
-};
-
 export default function UserDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -93,7 +86,9 @@ export default function UserDetailPage() {
   const [activeTab, setActiveTab] = useState("details")
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-  const currency = 'KES'; 
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState(false)
+  const [deleteInProgress, setDeleteInProgress] = useState(false)
 
   const fetchUserDetails = async () => {
     try {
@@ -180,6 +175,37 @@ export default function UserDetailPage() {
     }
   }
 
+  // Fix the handleDeleteUser function to ensure it's making the request correctly
+  const handleDeleteUser = async () => {
+    try {
+      setDeleteInProgress(true)
+      setError("")
+
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/login")
+        return
+      }
+
+      // Make sure we're using the correct URL format and method
+      await axios.delete(`/api/admin/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      // Redirect to admin page after successful deletion
+      router.push("/admin")
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      if (axios.isAxiosError(error) && error.response) {
+        setError(`Error: ${error.response.data.error || "Failed to delete user"}`)
+      } else {
+        setError("An unexpected error occurred while deleting the user")
+      }
+      setDeleteInProgress(false)
+      setDeleteConfirmation(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -260,9 +286,50 @@ export default function UserDetailPage() {
     )
   }
 
-  const formatAmount = (value: number) => {
-    return formatCurrency(value, currency);
-  };
+  const DeleteConfirmationModal = () => {
+    if (!deleteConfirmation) return null
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 shadow-xl">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600 dark:text-red-500" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Delete User Account</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Are you sure you want to delete {user?.name}&apos;s account? This action cannot be undone and will permanently
+              delete all user data, including inventory items, invoices, and activity history.
+            </p>
+            <div className="flex justify-center space-x-4">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmation(false)}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                disabled={deleteInProgress}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none"
+              >
+                {deleteInProgress ? (
+                  <span className="flex items-center">
+                    <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    Deleting...
+                  </span>
+                ) : (
+                  "Delete User"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <NavbarLayout>
@@ -574,7 +641,7 @@ export default function UserDetailPage() {
 
                       <div className="group">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Payment Due 
+                          Payment Due ($)
                         </label>
                         <div className="relative">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -611,28 +678,38 @@ export default function UserDetailPage() {
                     </div>
 
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-5 mt-2">
-                      <div className="flex justify-end">
+                      <div className="flex justify-between">
                         <button
                           type="button"
-                          onClick={fetchUserDetails}
-                          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 mr-3 transition-colors"
+                          onClick={() => setDeleteConfirmation(true)}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                         >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reset
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete User
                         </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveUser}
-                          disabled={isSaving}
-                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                        >
-                          {isSaving ? (
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Save className="h-4 w-4 mr-2" />
-                          )}
-                          {isSaving ? "Saving..." : "Save Changes"}
-                        </button>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={fetchUserDetails}
+                            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 mr-3 transition-colors"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Reset
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveUser}
+                            disabled={isSaving}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                          >
+                            {isSaving ? (
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Save className="h-4 w-4 mr-2" />
+                            )}
+                            {isSaving ? "Saving..." : "Save Changes"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -696,7 +773,7 @@ export default function UserDetailPage() {
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Payment Due</h3>
                           <p className="mt-1 text-lg font-medium text-gray-900 dark:text-white">
-                            {user.paymentDue ? formatAmount(user.paymentDue) : formatAmount(0)}
+                            {user.paymentDue ? `$${user.paymentDue.toFixed(2)}` : "$0.00"}
                           </p>
                         </div>
 
@@ -754,7 +831,7 @@ export default function UserDetailPage() {
                                 </div>
                                 <div className="mt-2 flex justify-between items-center">
                                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                   {formatAmount(invoice.amount)}
+                                    ${invoice.amount.toFixed(2)}
                                   </span>
                                   <Link
                                     href={`/admin/invoices/${invoice._id}`}
@@ -803,7 +880,8 @@ export default function UserDetailPage() {
                           onClick={(e) => {
                             e.preventDefault()
                             console.log("Navigating to inventory with userId:", userId)
-                            router.push(`/admin/inventory?userId=${userId}`)
+                            // Ensure userId is passed as a string
+                            router.push(`/admin/inventory?userId=${userId.toString()}`)
                           }}
                         >
                           View user inventory
@@ -928,7 +1006,7 @@ export default function UserDetailPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {formatAmount(invoice.amount)}
+                                    ${invoice.amount.toFixed(2)}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1056,6 +1134,7 @@ export default function UserDetailPage() {
           )}
         </div>
       </div>
+      <DeleteConfirmationModal />
     </NavbarLayout>
   )
 }

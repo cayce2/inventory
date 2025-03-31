@@ -165,3 +165,67 @@ export async function PUT(req: NextRequest, { params }: { params: { userId: stri
   }
 }
 
+export async function DELETE(req: NextRequest, { params }: { params: { userId: string } }) {
+  try {
+    const adminId = await authMiddleware(req)
+    if (!adminId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    // Verify the requester is an admin
+    const admin = await db.collection("users").findOne({ _id: new ObjectId(adminId) })
+    if (!admin || admin.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Get the user ID from the URL params
+    const { userId } = params
+
+    // Validate the user ID
+    if (!userId || !ObjectId.isValid(userId)) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 })
+    }
+
+    // Check if user exists before deletion
+    const userExists = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+    if (!userExists) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Delete the user
+    const result = await db.collection("users").deleteOne({ _id: new ObjectId(userId) })
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
+    }
+
+    // Log the deletion
+    await db.collection("audit_logs").insertOne({
+      action: "user_deleted",
+      userId: new ObjectId(userId),
+      performedBy: new ObjectId(adminId),
+      timestamp: new Date(),
+      details: { deletedUser: userExists.email }
+    })
+
+    return NextResponse.json(
+      {
+        message: "User deleted successfully",
+        deletedCount: result.deletedCount,
+      },
+      { status: 200 },
+    )
+  } catch (error) {
+    console.error("Error deleting user:", error)
+    return NextResponse.json(
+      {
+        error: "An error occurred while deleting the user",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
+  }
+}
