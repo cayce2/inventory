@@ -268,16 +268,16 @@ export default function Dashboard() {
             defaultValue="overview" 
             className="mb-8 space-y-8"
           >
-            <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 mx-auto bg-gray-100 p-1 rounded-lg">
+            <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 mx-auto bg-white-100 p-1 rounded-lg">
               <TabsTrigger 
                 value="overview"
-                className="data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm py-1"
+                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
               >
                 Business Overview
               </TabsTrigger>
               <TabsTrigger 
                 value="inventory"
-                className="data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm py-1"
+                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
               >
                 Inventory Management
               </TabsTrigger>

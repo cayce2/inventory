@@ -298,7 +298,7 @@ export default function Reports() {
                 <button
                   onClick={handleDownloadReport}
                   disabled={isLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 text-white font-medium rounded-lg text-sm px-5 py-3 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 text-white font-medium rounded-lg text-sm px-5 py-3 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
