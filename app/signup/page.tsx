@@ -1,487 +1,505 @@
-"use client"
+/* eslint-disable react-hooks/exhaustive-deps */
+'use client'
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { useRouter } from "next/navigation";
+import NavbarLayout from "@/components/NavbarLayout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { Package, DollarSign, AlertCircle, FileText, RefreshCw, TrendingUp, AlertTriangle, ArrowRight, ChevronRight } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { motion } from "framer-motion";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import axios from "axios"
-import { Eye, EyeOff, UserPlus, AlertCircle, Loader2, Mail, Lock, User, Phone, CheckCircle2, ShieldCheck } from "lucide-react"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import NavbarLayout from "@/components/NavbarLayout"
-import Link from "next/link"
-import Image from "next/image"
+interface DashboardStats {
+  totalItems: number;
+  totalItemsTrend: number;
+  lowStockItems: Array<{
+    _id: string;
+    name: string;
+    quantity: number;
+  }>;
+  lowStockTrend: number;
+  totalIncome: number;
+  revenueTrend: number;
+  unpaidInvoices: number;
+  unpaidInvoicesTrend: number;
+  trendData: Array<{ name: string; value: number }>;
+  lastUpdated: string;
+}
 
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  description?: string;
+  trend?: number;
+  loading: boolean;
+  bgColor: string;
+  iconBgColor: string;
+  iconColor: string;
+}
 
-export default function Signup() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    agreeToTerms: false
-  })
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [touched, setTouched] = useState({
-    name: false,
-    email: false,
-    phone: false,
-    password: false,
-    agreeToTerms: false
-  })
-  const router = useRouter()
+// Currency formatting utility function
+const formatCurrency = (value: number, currencyCode = 'KES') => {
+  return `${currencyCode} ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
 
-  // Password requirements
-  const passwordRequirements = [
-    { id: "length", label: "At least 8 characters", test: (pass: string) => pass.length >= 8 },
-    { id: "uppercase", label: "One uppercase letter", test: (pass: string) => /[A-Z]/.test(pass) },
-    { id: "lowercase", label: "One lowercase letter", test: (pass: string) => /[a-z]/.test(pass) },
-    { id: "number", label: "One number", test: (pass: string) => /[0-9]/.test(pass) },
-    { id: "special", label: "One special character", test: (pass: string) => /[^A-Za-z0-9]/.test(pass) }
-  ]
+export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats>({
+    totalItems: 0,
+    totalItemsTrend: 0,
+    lowStockItems: [],
+    lowStockTrend: 0,
+    totalIncome: 0,
+    revenueTrend: 0,
+    unpaidInvoices: 0,
+    unpaidInvoicesTrend: 0,
+    trendData: [],
+    lastUpdated: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const currency = 'KES';  
 
-  // Calculate password strength
-  const getPasswordStrength = (password: string) => {
-    if (!password) return 0
-    
-    let strength = 0
-    passwordRequirements.forEach(req => {
-      if (req.test(password)) strength++
-    })
-    
-    return strength
-  }
+  const router = useRouter();
 
-  // Get color for password strength meter
-  const getStrengthColor = (strength: number) => {
-    if (strength <= 1) return "bg-red-500"
-    if (strength <= 3) return "bg-yellow-500"
-    return "bg-green-500"
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }))
-    setError("") // Clear error when user types
-  }
-
-  const handleBlur = (field: string) => {
-    setTouched((prev) => ({ ...prev, [field]: true }))
-  }
-
-  const getFieldError = (field: string) => {
-    if (!touched[field as keyof typeof touched]) return null
-    
-    switch (field) {
-      case "name":
-        return !formData.name.trim() ? "Name is required" : null
-      case "email":
-        return !formData.email.trim() 
-          ? "Email is required" 
-          : !formData.email.includes("@") 
-            ? "Please enter a valid email" 
-            : null
-      case "phone":
-        // Basic international phone number validation with a plus sign and at least 7 digits
-        const phoneRegex = /^\+[0-9]{1,4}[0-9]{7,}$/
-        return !formData.phone.trim()
-          ? "Phone number is required"
-          : !phoneRegex.test(formData.phone)
-            ? "Please enter a valid international phone number (e.g., +1xxxxxxxxxx)"
-            : null
-      case "password":
-        // Enhanced password validation
-        if (!formData.password.trim()) return "Password is required"
-        
-        const strength = getPasswordStrength(formData.password)
-        if (strength < 5) {
-          const missingReqs = passwordRequirements
-            .filter(req => !req.test(formData.password))
-            .map(req => req.label.toLowerCase())
-            .join(", ")
-          return `Password must include ${missingReqs}`
-        }
-        return null
-      case "agreeToTerms":
-        return !formData.agreeToTerms ? "You must agree to the terms" : null
-      default:
-        return null
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
     }
-  }
+    fetchDashboardStats();
+  }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Touch all fields to show validation errors
-    setTouched({
-      name: true,
-      email: true,
-      phone: true,
-      password: true,
-      agreeToTerms: true
-    })
-    
-    // Check for validation errors
-    const formErrors = [
-      getFieldError("name"),
-      getFieldError("email"),
-      getFieldError("phone"),
-      getFieldError("password"),
-      getFieldError("agreeToTerms")
-    ].filter(Boolean)
-    
-    if (formErrors.length > 0) {
-      return
-    }
-    
-    setError("")
-    setIsLoading(true)
-
+  const fetchDashboardStats = async () => {
     try {
-      // First, create the user account
-      await axios.post("/api/auth/signup", formData)
-
-      // Then attempt to log in
-      try {
-        const loginResponse = await axios.post("/api/auth/login", { 
-          email: formData.email, 
-          password: formData.password 
-        })
-        localStorage.setItem("token", loginResponse.data.token)
-        
-        // Brief delay to show loading state
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 500)
-      } catch (loginError) {
-        console.error("Login after signup failed:", loginError)
-        // Redirect to login with success message
-        router.push("/login?registered=true")
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
       }
+      const response = await axios.get("/api/dashboard", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setStats(response.data);
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        if (error.response.data.details) {
-          // Handle validation errors
-          const validationErrors = error.response.data.details
-          if (Array.isArray(validationErrors)) {
-            setError(validationErrors.map((err) => err.message).join(", "))
-          } else {
-            setError(error.response.data.details || error.response.data.error || "An error occurred during signup")
-          }
-        } else {
-          setError(error.response.data.error || "An error occurred during signup")
-        }
-      } else {
-        setError("An unexpected error occurred")
-      }
-      console.error("Signup failed:", error)
+      setError("Failed to fetch dashboard data. Please try again later.");
+      console.error("Error fetching dashboard stats:", error);
     } finally {
-      setIsLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const passwordStrength = getPasswordStrength(formData.password)
-  const strengthColor = getStrengthColor(passwordStrength)
+  // Helper function that uses the current currency context
+  const formatAmount = (value: number) => {
+    return formatCurrency(value, currency);
+  };
+
+  const StatCard = ({ 
+    title, 
+    value, 
+    icon: Icon, 
+    description, 
+    trend, 
+    loading, 
+    bgColor, 
+    iconBgColor, 
+    iconColor 
+  }: StatCardProps) => (
+    <Card className={`border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${bgColor}`}>
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-2">
+            <p className="text-sm font-medium text-gray-700">{title}</p>
+            {loading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">{value}</p>
+            )}
+            {description && !loading && (
+              <p className="text-xs text-gray-600">{description}</p>
+            )}
+            {trend !== undefined && !loading && (
+              <div className={`flex items-center text-xs ${trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <TrendingUp className={`h-3 w-3 mr-1 ${trend >= 0 ? '' : 'rotate-180'}`} />
+                <span>{Math.abs(trend).toFixed(1)}% {trend >= 0 ? 'increase' : 'decrease'} from last month</span>
+              </div>
+            )}
+          </div>
+          <div className={`p-3 rounded-full ${iconBgColor}`}>
+            <Icon className={`h-5 w-5 ${iconColor}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <NavbarLayout>
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md space-y-4">
-          <div className="text-center space-y-2">
-          <div className="flex justify-center mb-2">
-              <Image 
-                src="/favicon.ico" 
-                alt="Logo" 
-                width={60} 
-                height={60} 
-                className="text-pink-600" 
-              />
+      <div className="min-h-screen bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          {/* Header section with animated entrance */}
+          <motion.div 
+            className="mb-10"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">
+                  Business Dashboard
+                </h1>
+                <p className="mt-2 text-gray-600 max-w-2xl">
+                  Get a quick overview of your business performance and inventory status
+                </p>
+              </div>
+              <Button 
+                onClick={fetchDashboardStats}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">Create an account</h1>
-            <p className="text-gray-500">Sign up to get started with our service</p>
+            <Separator className="mt-6" />
+          </motion.div>
+
+          {/* Error alert with animation */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="mb-6"
+            >
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {/* Stats cards with staggered animation */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <StatCard
+                title="Total Inventory"
+                value={stats.totalItems}
+                icon={Package}
+                description="Total items tracked in inventory"
+                trend={stats.totalItemsTrend}
+                loading={loading}
+                bgColor="bg-blue-50"
+                iconBgColor="bg-blue-100"
+                iconColor="text-blue-600"
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+            >
+              <StatCard
+                title="Low Stock Items"
+                value={stats.lowStockItems.length}
+                description="Items requiring immediate attention"
+                icon={AlertTriangle}
+                trend={stats.lowStockTrend}
+                loading={loading}
+                bgColor="bg-amber-50"
+                iconBgColor="bg-amber-100"
+                iconColor="text-amber-600"
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
+            >
+              <StatCard
+                title="Total Revenue"  
+                value={formatAmount(stats.totalIncome)}
+                description="Year-to-date revenue"
+                icon={DollarSign}
+                trend={stats.revenueTrend}
+                loading={loading}
+                bgColor="bg-green-50"
+                iconBgColor="bg-green-100"
+                iconColor="text-green-600"
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.4 }}
+            >
+              <StatCard
+                title="Unpaid Invoices"
+                value={stats.unpaidInvoices}
+                description="Outstanding payments to collect"
+                icon={FileText}
+                trend={stats.unpaidInvoicesTrend}
+                loading={loading}
+                bgColor="bg-purple-50"
+                iconBgColor="bg-purple-100"
+                iconColor="text-purple-600"
+              />
+            </motion.div>
           </div>
-          
-          <Card className="border-0 shadow-lg">
-            <CardContent className="pt-6">
-              {error && (
-                <Alert variant="destructive" className="mb-6 animate-in fade-in-50 duration-300">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="name" className="text-sm font-medium">
-                      Full Name
-                    </label>
-                    {touched.name && getFieldError("name") && (
-                      <span className="text-xs text-red-500">{getFieldError("name")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <User className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="name"
-                      name="name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={formData.name}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("name")}
-                      className={`pl-10 transition-all ${
-                        touched.name && getFieldError("name") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.name && !getFieldError("name") && formData.name.trim()
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    {touched.name && !getFieldError("name") && formData.name.trim() && (
-                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                    )}
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="email" className="text-sm font-medium">
-                      Email Address
-                    </label>
-                    {touched.email && getFieldError("email") && (
-                      <span className="text-xs text-red-500">{getFieldError("email")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={formData.email}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("email")}
-                      className={`pl-10 transition-all ${
-                        touched.email && getFieldError("email") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.email && !getFieldError("email") && formData.email.includes("@")
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    {touched.email && !getFieldError("email") && formData.email.includes("@") && (
-                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="phone" className="text-sm font-medium">
-                      Phone Number
-                    </label>
-                    {touched.phone && getFieldError("phone") && (
-                      <span className="text-xs text-red-500">{getFieldError("phone")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      placeholder="+12345678901"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("phone")}
-                      className={`pl-10 transition-all ${
-                        touched.phone && getFieldError("phone") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.phone && !getFieldError("phone") && formData.phone.trim()
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    {touched.phone && !getFieldError("phone") && formData.phone.trim() && (
-                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Format: +[country code][number] (e.g., +1 for US, +44 for UK, +254 for Kenya)</p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="password" className="text-sm font-medium">
-                      Password
-                    </label>
-                    {touched.password && getFieldError("password") && (
-                      <span className="text-xs text-red-500">{getFieldError("password")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Create a strong password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("password")}
-                      autoComplete="new-password"
-                      className={`pl-10 pr-10 transition-all ${
-                        touched.password && getFieldError("password") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.password && !getFieldError("password")
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                          >
-                            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {showPassword ? "Hide password" : "Show password"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  
-                  {/* Password strength indicator */}
-                  {formData.password && (
-                    <div className="mt-2 space-y-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium">Password strength</span>
-                        <span className="text-xs font-medium">
-                          {passwordStrength === 0 ? "Very weak" :
-                           passwordStrength === 1 ? "Weak" :
-                           passwordStrength === 2 ? "Fair" :
-                           passwordStrength === 3 ? "Good" :
-                           passwordStrength === 4 ? "Strong" : "Very strong"}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className={`h-1.5 rounded-full ${strengthColor}`} 
-                          style={{ width: `${(passwordStrength / 5) * 100}%` }}
-                        ></div>
-                      </div>
-                      
-                      {/* Password requirements checklist */}
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-xs font-medium flex items-center">
-                          <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-gray-500" />
-                          Password requirements:
-                        </p>
-                        <ul className="pl-5 space-y-1">
-                          {passwordRequirements.map((req) => (
-                            <li 
-                              key={req.id} 
-                              className={`text-xs flex items-center ${req.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
-                            >
-                              {req.test(formData.password) ? (
-                                <CheckCircle2 className="h-3 w-3 mr-1.5" />
-                              ) : (
-                                <div className="h-3 w-3 mr-1.5 rounded-full border border-gray-400" />
-                              )}
-                              {req.label}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <input
-                      id="agreeToTerms"
-                      name="agreeToTerms"
-                      type="checkbox"
-                      checked={formData.agreeToTerms}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("agreeToTerms")}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="agreeToTerms" className="ml-2 text-sm text-gray-600">
-                      I agree to the{" "}
-                      <Link href="/terms" className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
-                        Terms and Conditions
-                      </Link>
-                    </label>
-                  </div>
-                  {touched.agreeToTerms && getFieldError("agreeToTerms") && (
-                    <span className="text-xs text-red-500 block">{getFieldError("agreeToTerms")}</span>
-                  )}
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full h-12 mt-6 transition-all duration-300 bg-indigo-600 hover:bg-indigo-700"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Creating account...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center">
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      <span>Create account</span>
-                    </div>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
+          {/* Main content with tabs */}
+          <Tabs 
+            defaultValue="overview" 
+            className="mb-8 space-y-8"
+          >
+            <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 mx-auto bg-white-100 p-1 rounded-lg">
+              <TabsTrigger 
+                value="overview"
+                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
+              >
+                Business Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="inventory"
+                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
+              >
+                Inventory Management
+              </TabsTrigger>
+            </TabsList>
             
-            <CardFooter className="flex justify-center pb-6 pt-2">
-              <p className="text-sm text-gray-500">
-                Already have an account?{" "}
-                <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
-                  Sign in
-                </Link>
-              </p>
-            </CardFooter>
-          </Card>
-          
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <Link href="/rights" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Rights
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/privacy" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Privacy
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/terms" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Terms
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/support" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Support
-            </Link>
-          </div>
+            <TabsContent value="overview" className="space-y-6">
+              {/* Revenue trend card */}
+              <Card className="shadow-sm border border-gray-100 overflow-hidden">
+                <CardHeader className="pb-2 border-b">
+                  <CardTitle className="text-xl text-gray-900">Revenue Trends</CardTitle>
+                  <CardDescription>Monthly revenue performance over the past 6 months</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="h-[350px]">
+                    {loading ? (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Skeleton className="h-[300px] w-full rounded-lg" />
+                      </div>
+                    ) : stats.trendData.length === 0 || stats.trendData.every(item => item.value === 0) ? (
+                      <div className="h-full w-full flex flex-col items-center justify-center text-gray-500">
+                        <FileText className="h-16 w-16 mb-4 text-gray-300" />
+                        <p className="text-lg font-medium">No revenue data available yet</p>
+                        <p className="text-sm mt-2">Start creating invoices to see your revenue trends</p>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={stats.trendData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                          <defs>
+                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366F1" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis 
+                            dataKey="name" 
+                            stroke="#9CA3AF" 
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            axisLine={{ stroke: '#E5E7EB' }}
+                          />
+                          <YAxis 
+                            stroke="#9CA3AF" 
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            axisLine={{ stroke: '#E5E7EB' }}
+                            tickFormatter={(value) => `${currency} ${value.toLocaleString()}`}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'white', 
+                              borderRadius: '8px', 
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              border: '1px solid #E5E7EB',
+                              padding: '10px'
+                            }}
+                            formatter={(value: number) => [formatAmount(value), 'Revenue']}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#6366F1" 
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorValue)"
+                            dot={{ stroke: '#4F46E5', strokeWidth: 2, fill: 'white', r: 4 }}
+                            activeDot={{ stroke: '#4F46E5', strokeWidth: 2, fill: '#4F46E5', r: 6 }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-gray-50 py-3 px-6 border-t">
+                  <div className="w-full flex justify-between items-center">
+                    <p className="text-sm text-gray-500">
+                      Data updated on {stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                      }) : 'N/A'}
+                    </p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-indigo-600 hover:text-indigo-800"
+                      onClick={() => window.location.href = '/reports'}
+                    >
+                      View detailed report <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="inventory" className="space-y-6">
+              {/* Inventory status card */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <Card className="shadow-sm border border-gray-100 col-span-2">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-xl text-gray-900">Low Stock Alerts</CardTitle>
+                    <CardDescription>Items that need to be restocked soon</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {loading ? (
+                      <div className="p-6 space-y-3">
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    ) : stats.lowStockItems.length === 0 ? (
+                      <div className="text-center py-16">
+                        <Package className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                        <p className="text-gray-600 font-medium">All items adequately stocked</p>
+                        <p className="text-gray-500 text-sm mt-1">No low stock items detected</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden">
+                        <Table>
+                          <TableHeader className="bg-gray-50">
+                            <TableRow>
+                              <TableHead className="font-medium text-gray-700">Item Name</TableHead>
+                              <TableHead className="font-medium text-gray-700">Stock Level</TableHead>
+                              <TableHead className="font-medium text-gray-700">Status</TableHead>
+                              <TableHead className="font-medium text-gray-700 text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {stats.lowStockItems.map((item) => (
+                              <TableRow key={item._id} className="hover:bg-gray-50 transition-colors">
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Progress value={(item.quantity / 20) * 100} className="h-2 w-24" />
+                                    <span className="text-sm text-gray-700">{item.quantity} units</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100">
+                                    Critical
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-800">
+                                    Restock
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                  {!loading && stats.lowStockItems.length > 0 && (
+                    <CardFooter className="bg-gray-50 py-3 px-6 border-t">
+                      <Button variant="outline" size="sm" className="ml-auto">
+                        View all inventory <ArrowRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </CardFooter>
+                  )}
+                </Card>
+
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-lg text-gray-900">Inventory Health</CardTitle>
+                    <CardDescription>Current stock status</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loading ? (
+                      <Skeleton className="h-[200px] w-full rounded-lg" />
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="text-center">
+                          <div className="inline-flex items-center justify-center p-4 bg-indigo-50 rounded-full mb-3">
+                            <Package className="h-6 w-6 text-indigo-600" />
+                          </div>
+                          <h3 className="text-2xl font-bold text-gray-900">{stats.totalItems}</h3>
+                          <p className="text-sm text-gray-500">Total items in stock</p>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-4">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Healthy Stock</span>
+                            <span className="font-medium text-gray-900">
+                              {stats.totalItems - stats.lowStockItems.length} items
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Low Stock</span>
+                            <span className="font-medium text-red-600">
+                              {stats.lowStockItems.length} items
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Stock Alert Threshold</span>
+                            <span className="font-medium text-gray-900">10 units</span>
+                          </div>
+                        </div>
+
+                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                          Generate Restock Order
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </NavbarLayout>
-  )
+  );
 }
