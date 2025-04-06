@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import axios from "axios"
-import { Eye, EyeOff, UserPlus, AlertCircle, Loader2, Mail, Lock, User, Phone, CheckCircle2 } from "lucide-react"
+import { Eye, EyeOff, UserPlus, AlertCircle, Loader2, Mail, Lock, User, Phone, CheckCircle2, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -34,6 +34,34 @@ export default function Signup() {
   })
   const router = useRouter()
 
+  // Password requirements
+  const passwordRequirements = [
+    { id: "length", label: "At least 8 characters", test: (pass: string) => pass.length >= 8 },
+    { id: "uppercase", label: "One uppercase letter", test: (pass: string) => /[A-Z]/.test(pass) },
+    { id: "lowercase", label: "One lowercase letter", test: (pass: string) => /[a-z]/.test(pass) },
+    { id: "number", label: "One number", test: (pass: string) => /[0-9]/.test(pass) },
+    { id: "special", label: "One special character", test: (pass: string) => /[^A-Za-z0-9]/.test(pass) }
+  ]
+
+  // Calculate password strength
+  const getPasswordStrength = (password: string) => {
+    if (!password) return 0
+    
+    let strength = 0
+    passwordRequirements.forEach(req => {
+      if (req.test(password)) strength++
+    })
+    
+    return strength
+  }
+
+  // Get color for password strength meter
+  const getStrengthColor = (strength: number) => {
+    if (strength <= 1) return "bg-red-500"
+    if (strength <= 3) return "bg-yellow-500"
+    return "bg-green-500"
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
     setFormData(prev => ({
@@ -60,13 +88,26 @@ export default function Signup() {
             ? "Please enter a valid email" 
             : null
       case "phone":
-        return !formData.phone.trim() ? "Phone number is required" : null
-      case "password":
-        return !formData.password.trim()
-          ? "Password is required" 
-          : formData.password.length < 6
-            ? "Password must be at least 6 characters"
+        // Basic international phone number validation with a plus sign and at least 7 digits
+        const phoneRegex = /^\+[0-9]{1,4}[0-9]{7,}$/
+        return !formData.phone.trim()
+          ? "Phone number is required"
+          : !phoneRegex.test(formData.phone)
+            ? "Please enter a valid international phone number (e.g., +1xxxxxxxxxx)"
             : null
+      case "password":
+        // Enhanced password validation
+        if (!formData.password.trim()) return "Password is required"
+        
+        const strength = getPasswordStrength(formData.password)
+        if (strength < 5) {
+          const missingReqs = passwordRequirements
+            .filter(req => !req.test(formData.password))
+            .map(req => req.label.toLowerCase())
+            .join(", ")
+          return `Password must include ${missingReqs}`
+        }
+        return null
       case "agreeToTerms":
         return !formData.agreeToTerms ? "You must agree to the terms" : null
       default:
@@ -144,6 +185,9 @@ export default function Signup() {
       setIsLoading(false)
     }
   }
+
+  const passwordStrength = getPasswordStrength(formData.password)
+  const strengthColor = getStrengthColor(passwordStrength)
 
   return (
     <NavbarLayout>
@@ -254,7 +298,7 @@ export default function Signup() {
                       id="phone"
                       name="phone"
                       type="tel"
-                      placeholder="(123) 456-7890"
+                      placeholder="+12345678901"
                       value={formData.phone}
                       onChange={handleChange}
                       onBlur={() => handleBlur("phone")}
@@ -270,6 +314,7 @@ export default function Signup() {
                       <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Format: +[country code][number] (e.g., +1 for US, +44 for UK, +254 for Kenya)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -291,10 +336,11 @@ export default function Signup() {
                       value={formData.password}
                       onChange={handleChange}
                       onBlur={() => handleBlur("password")}
+                      autoComplete="new-password"
                       className={`pl-10 pr-10 transition-all ${
                         touched.password && getFieldError("password") 
                           ? "border-red-500 ring-red-100" 
-                          : touched.password && !getFieldError("password") && formData.password.trim().length >= 6
+                          : touched.password && !getFieldError("password")
                             ? "border-green-500 ring-green-100"
                             : ""
                       }`}
@@ -317,6 +363,51 @@ export default function Signup() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
+                  
+                  {/* Password strength indicator */}
+                  {formData.password && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium">Password strength</span>
+                        <span className="text-xs font-medium">
+                          {passwordStrength === 0 ? "Very weak" :
+                           passwordStrength === 1 ? "Weak" :
+                           passwordStrength === 2 ? "Fair" :
+                           passwordStrength === 3 ? "Good" :
+                           passwordStrength === 4 ? "Strong" : "Very strong"}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div 
+                          className={`h-1.5 rounded-full ${strengthColor}`} 
+                          style={{ width: `${(passwordStrength / 5) * 100}%` }}
+                        ></div>
+                      </div>
+                      
+                      {/* Password requirements checklist */}
+                      <div className="mt-3 space-y-1.5">
+                        <p className="text-xs font-medium flex items-center">
+                          <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-gray-500" />
+                          Password requirements:
+                        </p>
+                        <ul className="pl-5 space-y-1">
+                          {passwordRequirements.map((req) => (
+                            <li 
+                              key={req.id} 
+                              className={`text-xs flex items-center ${req.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                            >
+                              {req.test(formData.password) ? (
+                                <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                              ) : (
+                                <div className="h-3 w-3 mr-1.5 rounded-full border border-gray-400" />
+                              )}
+                              {req.label}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
