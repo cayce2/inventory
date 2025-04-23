@@ -30,8 +30,12 @@ export async function GET(req: NextRequest) {
       })
       .toArray()
 
-    // Invoice data
-    const invoices = await db.collection("invoices").find({ userId }).toArray()
+    // Invoice data - excluding deleted invoices
+    const invoices = await db.collection("invoices").find({ 
+      userId, 
+      deleted: { $ne: true } // Exclude deleted invoices
+    }).toArray()
+    
     const totalIncome = invoices.reduce((sum, invoice) => sum + (invoice.status === "paid" ? invoice.amount : 0), 0)
     const unpaidInvoices = invoices.filter((invoice) => invoice.status === "unpaid").length
 
@@ -181,7 +185,8 @@ async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount =
         $gte: monthStart,
         $lte: monthEnd
       },
-      status: "paid"
+      status: "paid",
+      deleted: { $ne: true } // Exclude deleted invoices
     }).toArray()
     
     const monthlyRevenue = monthlyInvoices.reduce((sum: number, invoice: { amount: number }) => sum + invoice.amount, 0)
@@ -201,6 +206,14 @@ async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount =
 async function calculateRevenueByCategory(db: any, userId: string, categories: any[]) {
   const categoryRevenueData = []
   
+  // First, get all non-deleted invoices to find relevant invoice items
+  const validInvoices = await db.collection("invoices").find({
+    userId,
+    deleted: { $ne: true }
+  }).toArray()
+  
+  const validInvoiceIds = validInvoices.map((invoice: { _id: any }) => invoice._id)
+  
   for (const category of categories) {
     // Get all products in this category
     const products = await db.collection("inventory").find({
@@ -210,10 +223,11 @@ async function calculateRevenueByCategory(db: any, userId: string, categories: a
     
     const productIds = products.map((product: { _id: any }) => product._id)
     
-    // Calculate revenue from invoice items matching these products
+    // Calculate revenue from invoice items matching these products and from non-deleted invoices
     const invoiceItems = await db.collection("invoice_items").find({
       userId,
-      productId: { $in: productIds }
+      productId: { $in: productIds },
+      invoiceId: { $in: validInvoiceIds } // Only include items from non-deleted invoices
     }).toArray()
     
     const categoryRevenue = invoiceItems.reduce((sum: number, item: { price: number, quantity: number }) => sum + (item.price * item.quantity), 0)
@@ -227,7 +241,7 @@ async function calculateRevenueByCategory(db: any, userId: string, categories: a
   // If no categories found, create sample data
   if (categoryRevenueData.length === 0) {
     const totalIncome = await db.collection("invoices")
-      .find({ userId, status: "paid" })
+      .find({ userId, status: "paid", deleted: { $ne: true } })
       .toArray()
       .then((invoices: any[]) => invoices.reduce((sum: number, invoice: any) => sum + invoice.amount, 0))
     
@@ -267,15 +281,15 @@ async function calculateKPIs(db: any, userId: string) {
   })
   
   const totalRevenue = await db.collection("invoices")
-    .find({ userId, status: "paid" })
+    .find({ userId, status: "paid", deleted: { $ne: true } })
     .toArray()
     .then((invoices: any[]) => invoices.reduce((sum: number, invoice: any) => sum + invoice.amount, 0))
   
   const revenueTarget = annualTarget?.amount ? (totalRevenue / annualTarget.amount * 100) : 0
   
   // Invoice collection
-  const allInvoices = await db.collection("invoices").countDocuments({ userId })
-  const paidInvoices = await db.collection("invoices").countDocuments({ userId, status: "paid" })
+  const allInvoices = await db.collection("invoices").countDocuments({ userId, deleted: { $ne: true } })
+  const paidInvoices = await db.collection("invoices").countDocuments({ userId, status: "paid", deleted: { $ne: true } })
   const invoiceCollection = allInvoices ? (paidInvoices / allInvoices * 100) : 0
   
   // Stock capacity
