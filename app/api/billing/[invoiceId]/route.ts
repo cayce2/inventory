@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
-import { ObjectId } from "mongodb"
+import { Db, ObjectId } from "mongodb"
 
 export async function PUT(req: NextRequest, { params }: { params: { invoiceId: string } }) {
   try {
@@ -55,22 +56,6 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    let updateData = {}
-    switch (action) {
-      case "markPaid":
-        updateData = { status: "paid" }
-        break
-      case "markUnpaid":
-        updateData = { status: "unpaid" }
-        break
-      case "delete":
-        updateData = { deleted: true }
-        break
-      case "restore":
-        updateData = { deleted: false }
-        break
-    }
-
     // Try to convert invoiceId to ObjectId, but handle gracefully if it fails
     let invoiceObjId
     try {
@@ -100,6 +85,40 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
       return NextResponse.json({ error: "You don't have permission to modify this invoice" }, { status: 403 })
     }
 
+    let updateData = {}
+    
+    // Handle special case for delete action when invoice is unpaid
+    if (action === "delete" && invoice.status !== "paid") {
+      try {
+        // Return items to inventory
+        await returnItemsToInventory(db, invoice.items, userIdObj)
+        console.log(`Items from unpaid invoice ${invoiceId} returned to inventory`)
+        updateData = { deleted: true }
+      } catch (error) {
+        console.error("Error returning items to inventory:", error)
+        return NextResponse.json({ 
+          error: "Failed to return items to inventory", 
+          details: error instanceof Error ? error.message : String(error) 
+        }, { status: 500 })
+      }
+    } else {
+      // Handle other actions as before
+      switch (action) {
+        case "markPaid":
+          updateData = { status: "paid" }
+          break
+        case "markUnpaid":
+          updateData = { status: "unpaid" }
+          break
+        case "delete":
+          updateData = { deleted: true }
+          break
+        case "restore":
+          updateData = { deleted: false }
+          break
+      }
+    }
+
     // Log the update operation for debugging
     console.log(`Updating invoice ${invoiceId} with action ${action}`)
     console.log(`Update data: ${JSON.stringify(updateData)}`)
@@ -112,7 +131,10 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
       return NextResponse.json({ error: "Failed to update invoice" }, { status: 500 })
     }
 
-    return NextResponse.json({ message: "Invoice updated successfully" }, { status: 200 })
+    return NextResponse.json({ 
+      message: "Invoice updated successfully",
+      inventoryUpdated: action === "delete" && invoice.status !== "paid"
+    }, { status: 200 })
   } catch (error) {
     console.error("Error updating invoice:", error)
     return NextResponse.json(
@@ -125,3 +147,64 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
   }
 }
 
+/**
+ * Returns items from a deleted unpaid invoice back to inventory
+ * @param db MongoDB database instance
+ * @param items Array of invoice items to return to inventory
+ * @param userId User ID who owns the inventory
+ */
+async function returnItemsToInventory(
+  db: Db,
+  items: { inventoryItemId: string; quantity: number }[],
+  userId: ObjectId
+) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    console.log("No items to return to inventory")
+    return
+  }
+
+  const bulkOps = items.map(item => {
+    // Check if item has required properties
+    if (!item.inventoryItemId || !item.quantity) {
+      console.warn("Skipping invalid item:", item)
+      return null
+    }
+
+    let itemId
+    try {
+      itemId = new ObjectId(item.inventoryItemId)
+    } catch (error) {
+      console.warn(`Invalid inventory item ID format: ${item.inventoryItemId}`)
+      return null
+    }
+
+    // Create update operation to increment the quantity
+    return {
+      updateOne: {
+        filter: { _id: itemId, userId },
+        update: { $inc: { quantity: item.quantity } },
+        upsert: false
+      }
+    } as const
+  }).filter((op): op is NonNullable<typeof op> => op !== null)
+  
+  if (bulkOps.length === 0) {
+    console.log("No valid items to return to inventory")
+    return
+  }
+
+  console.log(`Returning ${bulkOps.length} items to inventory`)
+  
+  const result = await db.collection("inventory").bulkWrite(bulkOps)
+  console.log("Inventory update result:", {
+    modifiedCount: result.modifiedCount,
+    matchedCount: result.matchedCount,
+    upsertedCount: result.upsertedCount
+  })
+  
+  if (result.modifiedCount !== bulkOps.length) {
+    console.warn(`Only ${result.modifiedCount} of ${bulkOps.length} items were updated in inventory`)
+  }
+  
+  return result
+}

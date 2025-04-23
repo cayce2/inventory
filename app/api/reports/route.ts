@@ -73,8 +73,8 @@ export async function GET(req: NextRequest) {
     // Fetch all inventory items
     const inventory = await db.collection("inventory").find({ userId }).toArray()
 
-    // Fetch invoices with date filter
-    const invoiceQuery: any = { userId }
+    // Fetch invoices with date filter, excluding deleted invoices
+    const invoiceQuery: any = { userId, deleted: { $ne: true } }
     if (Object.keys(dateFilter).length > 0) {
       invoiceQuery.createdAt = dateFilter
     }
@@ -262,8 +262,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fetch invoices with date filter
-    const invoiceQuery: any = { userId }
+    // Fetch invoices with date filter, excluding deleted invoices
+    const invoiceQuery: any = { userId, deleted: { $ne: true } }
     if (Object.keys(dateFilter).length > 0) {
       invoiceQuery.createdAt = dateFilter
     }
@@ -334,4 +334,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "An error occurred while fetching report data" }, { status: 500 })
   }
 }
-
