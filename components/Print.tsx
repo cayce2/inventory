@@ -47,7 +47,9 @@ interface PrintProps {
   dueDate?: string;
   status?: "paid" | "unpaid";
   invoiceNumber?: string;
+  currency: string
 }
+
 
 const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) => {
   // Map items in invoice to their corresponding inventory details

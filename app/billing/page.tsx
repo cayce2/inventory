@@ -129,31 +129,56 @@ export default function Billing() {
     }
   }
 
+  // Calculate remaining quantity considering items already in the invoice
+  const getRemainingQuantity = (itemId: string) => {
+    const inventoryItem = inventory.find(item => item._id === itemId);
+    if (!inventoryItem) return 0;
+    
+    // Check if this item is already in the invoice and subtract those quantities
+    const alreadyInInvoice = newInvoice.items
+      .filter(item => item.itemId === itemId)
+      .reduce((total, item) => total + item.quantity, 0);
+    
+    return Math.max(0, inventoryItem.quantity - alreadyInInvoice);
+  };
+
   const handleAddItem = () => {
     if (selectedItem && selectedQuantity > 0) {
-      const item = inventory.find((i) => i._id === selectedItem)
-      if (item) {
-        const newItems = [
-          ...newInvoice.items,
-          {
-            itemId: selectedItem,
-            quantity: selectedQuantity,
-            adjustedPrice: item.price,
-          },
-        ]
-        const newAmount = newItems.reduce((total, item) => {
-          const inventoryItem = inventory.find((i) => i._id === item.itemId)
-          const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0
-          return total + price * item.quantity
-        }, 0)
-        setNewInvoice({
-          ...newInvoice,
-          items: newItems,
-          amount: newAmount,
-        })
-        setSelectedItem("")
-        setSelectedQuantity(1)
+      const item = inventory.find((i) => i._id === selectedItem);
+      if (!item) {
+        setError("Selected item not found in inventory.");
+        return;
       }
+      
+      const remainingQuantity = getRemainingQuantity(selectedItem);
+      
+      // Check if requested quantity exceeds available quantity
+      if (selectedQuantity > remainingQuantity) {
+        setError(`Cannot add ${selectedQuantity} units of ${item.name}. Only ${remainingQuantity} available in stock.`);
+        return;
+      }
+      
+      const newItems = [
+        ...newInvoice.items,
+        {
+          itemId: selectedItem,
+          quantity: selectedQuantity,
+          adjustedPrice: item.price,
+        },
+      ]
+      const newAmount = newItems.reduce((total, item) => {
+        const inventoryItem = inventory.find((i) => i._id === item.itemId)
+        const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0
+        return total + price * item.quantity
+      }, 0)
+      setNewInvoice({
+        ...newInvoice,
+        items: newItems,
+        amount: newAmount,
+      })
+      setSelectedItem("")
+      setSelectedQuantity(1)
+      setError(null)
     }
   }
 
@@ -189,6 +214,73 @@ export default function Billing() {
     })
   }
 
+  const handleQuantityChange = (index: number, newQuantity: number) => {
+    const updatedItems = [...newInvoice.items];
+    const item = updatedItems[index];
+    const inventoryItem = inventory.find(i => i._id === item.itemId);
+    if (!inventoryItem) {
+      setError("Item not found in inventory.");
+      return;
+    }
+    
+    // Calculate how many of this item are in other rows of the invoice
+    const quantityInOtherRows = updatedItems
+      .filter((_, i) => i !== index)
+      .filter(invoiceItem => invoiceItem.itemId === item.itemId)
+      .reduce((total, invoiceItem) => total + invoiceItem.quantity, 0);
+    
+    // Calculate maximum available quantity
+    const maxAvailable = inventoryItem.quantity - quantityInOtherRows;
+    
+    if (newQuantity > maxAvailable) {
+      setError(`Cannot set quantity to ${newQuantity}. Only ${maxAvailable} units of ${inventoryItem.name} available.`);
+      return;
+    }
+    
+    // Update quantity if valid
+    updatedItems[index].quantity = newQuantity;
+    
+    // Recalculate total amount
+    const newAmount = updatedItems.reduce((total, item) => {
+      const invItem = inventory.find((i) => i._id === item.itemId);
+      const price = item.adjustedPrice !== undefined ? item.adjustedPrice : invItem ? invItem.price : 0;
+      return total + price * item.quantity;
+    }, 0);
+    
+    setNewInvoice({
+      ...newInvoice,
+      items: updatedItems,
+      amount: newAmount,
+    });
+    setError(null);
+  };
+
+  const validateInventoryLevels = (): boolean => {
+    // Group items by itemId and sum quantities
+    const quantitiesByItem = new Map<string, number>();
+    
+    for (const item of newInvoice.items) {
+      const currentQty = quantitiesByItem.get(item.itemId) || 0;
+      quantitiesByItem.set(item.itemId, currentQty + item.quantity);
+    }
+    
+    // Check if any item exceeds available inventory
+    for (const [itemId, requestedQty] of quantitiesByItem.entries()) {
+      const inventoryItem = inventory.find(item => item._id === itemId);
+      if (!inventoryItem) {
+        setError("An item in your invoice is no longer available in inventory.");
+        return false;
+      }
+      
+      if (requestedQty > inventoryItem.quantity) {
+        setError(`Not enough ${inventoryItem.name} in stock. Requested: ${requestedQty}, Available: ${inventoryItem.quantity}`);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
   const handleAddInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -199,6 +291,13 @@ export default function Billing() {
   
       if (!newInvoice.customerName || !newInvoice.dueDate || newInvoice.items.length === 0) {
         setError("Please fill in all required fields and add at least one item");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Validate inventory levels before submitting
+      if (!validateInventoryLevels()) {
+        setIsLoading(false);
         return;
       }
   
@@ -250,6 +349,10 @@ export default function Billing() {
       })
 
       await fetchInvoices()
+      // Also refresh inventory as stock levels may have changed
+      if (action === "markPaid" || action === "markUnpaid") {
+        await fetchInventory()
+      }
     } catch (error) {
       console.error(`Error performing action on invoice:`, error)
       if (axios.isAxiosError(error) && error.response) {
@@ -627,240 +730,238 @@ export default function Billing() {
                     </button>
                   </div>
                   <div className="overflow-y-auto p-6 max-h-[calc(90vh-60px)]">
-                    <form ref={formRef} onSubmit={handleAddInvoice} className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label htmlFor="invoiceNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                            Invoice Number *
-                          </label>
-                          <input
-                            type="text"
-                            id="invoiceNumber"
-                            value={newInvoice.invoiceNumber}
-                            readOnly
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 cursor-not-allowed"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Name *
-                          </label>
-                          <input
-                            type="text"
-                            id="customerName"
-                            value={newInvoice.customerName}
-                            onChange={(e) => setNewInvoice({ ...newInvoice, customerName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-1">
-                            Customer Phone *
-                          </label>
-                          <input
-                            type="tel"
-                            id="customerPhone"
-                            value={newInvoice.customerPhone}
-                            onChange={(e) => setNewInvoice({ ...newInvoice, customerPhone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
-                            Due Date *
-                          </label>
-                          <input
-                            type="date"
-                            id="dueDate"
-                            value={newInvoice.dueDate}
-                            onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                        </div>
-                      </div>
+                  <form ref={formRef} onSubmit={handleAddInvoice}>
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label htmlFor="invoiceNumber" className="block text-sm font-medium text-gray-700 mb-1">
+          Invoice Number
+        </label>
+        <input
+          type="text"
+          id="invoiceNumber"
+          value={newInvoice.invoiceNumber}
+          onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })}
+          className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="INV-XXXXXXXX"
+        />
+      </div>
+      <div>
+        <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
+          Due Date *
+        </label>
+        <input
+          type="date"
+          id="dueDate"
+          value={newInvoice.dueDate}
+          onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
+          className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+      </div>
+      <div>
+        <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
+          Customer Name *
+        </label>
+        <input
+          type="text"
+          id="customerName"
+          value={newInvoice.customerName}
+          onChange={(e) => setNewInvoice({ ...newInvoice, customerName: e.target.value })}
+          className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Enter customer name"
+          required
+        />
+      </div>
+      <div>
+        <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-1">
+          Customer Phone
+        </label>
+        <input
+          type="text"
+          id="customerPhone"
+          value={newInvoice.customerPhone}
+          onChange={(e) => setNewInvoice({ ...newInvoice, customerPhone: e.target.value })}
+          className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Enter customer phone"
+        />
+      </div>
+    </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Add Item</label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <select
-                            value={selectedItem}
-                            onChange={(e) => setSelectedItem(e.target.value)}
-                            className="w-full sm:flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="">Select an item</option>
-                            {inventory.map((item) => (
-                              <option key={item._id} value={item._id}>
-                                {item.name} - {formatAmount(item.price)} (Available: {item.quantity})
-                              </option>
-                            ))}
-                          </select>
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              value={selectedQuantity}
-                              onChange={(e) => setSelectedQuantity(Number(e.target.value))}
-                              min="1"
-                              className="w-20 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="Qty"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleAddItem}
-                              disabled={!selectedItem || selectedQuantity < 1}
-                              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
-                            >
-                              Add
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+    <div>
+      <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Items</h4>
+      <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label htmlFor="itemSelect" className="block text-sm font-medium text-gray-700 mb-1">
+            Item
+          </label>
+          <select
+            id="itemSelect"
+            value={selectedItem}
+            onChange={(e) => setSelectedItem(e.target.value)}
+            className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select an item</option>
+            {inventory.map((item) => (
+              <option key={item._id} value={item._id} disabled={getRemainingQuantity(item._id) <= 0}>
+                {item.name} (Stock: {getRemainingQuantity(item._id)}) - {formatCurrency(item.price, currency)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">
+            Quantity
+          </label>
+          <input
+            type="number"
+            id="quantity"
+            min="1"
+            max={selectedItem ? getRemainingQuantity(selectedItem) : 1}
+            value={selectedQuantity}
+            onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
+            className="w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={handleAddItem}
+            disabled={!selectedItem || selectedQuantity <= 0}
+            className="w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+          >
+            Add Item
+          </button>
+        </div>
+      </div>
 
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Items</h4>
-                        {newInvoice.items.length === 0 ? (
-                          <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
-                              <p className="text-gray-500">No items added to this invoice</p>
-                              <p className="text-sm text-gray-400">Select items from the inventory above</p>
-                            </div>
-                          ) : (
-                          <div className="overflow-x-auto border border-gray-200 rounded-md">
-                          <div className="min-w-full inline-block align-middle">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Item
-                                  </th>
-                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Price ({currency})
-                                  </th>
-                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Quantity
-                                  </th>
-                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Subtotal
-                                  </th>
-                                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Action
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                {newInvoice.items.map((item, index) => {
-                                  const inventoryItem = inventory.find((i) => i._id === item.itemId);
-                                  const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0;
-                                  const subtotal = price * item.quantity;
-              
-                                  return (
-                                    <tr key={index}>
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {inventoryItem?.name || "Unknown Item"}
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                                        <input
-                                          type="number"
-                                          value={price}
-                                          onChange={(e) => handlePriceAdjustment(index, Number(e.target.value))}
-                                          min="0"
-                                          step="0.01"
-                                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-right"
-                                        />
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                                        {item.quantity}
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-                                        {subtotal.toFixed(2)}
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveItem(index)}
-                                          className="text-red-600 hover:text-red-800"
-                                          >
-                                          <Trash2 size={16} />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                                <tr className="bg-gray-50">
-                                  <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-                                    Total Amount:
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                                    {newInvoice.amount.toFixed(2)}
-                                  </td>
-                                  <td></td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                        <button
-                          type="button"
-                          onClick={() => setIsCreatingInvoice(false)}
-                          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isLoading || newInvoice.items.length === 0}
-                          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {isLoading ? (
-                            <span className="flex items-center">
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Saving...
-                            </span>
-                          ) : (
-                            "Create Invoice"
-                          )}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* Print Modal */}
-        <AnimatePresence>
-          {showPrintModal && printingInvoice && (
-            <>
-              <div className="fixed inset-0 bg-black bg-opacity-25 backdrop-blur-sm z-30" onClick={() => setShowPrintModal(false)}></div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="fixed inset-0 overflow-y-auto z-40 flex items-center justify-center p-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-medium text-gray-900">Print Invoice</h3>
-                    <div className="flex space-x-2">
+      {newInvoice.items.length > 0 ? (
+        <div className="overflow-x-auto rounded-md border border-gray-300 mb-4">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Item
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Quantity
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Unit Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {newInvoice.items.map((item, index) => {
+                const inventoryItem = inventory.find((i) => i._id === item.itemId);
+                const price = item.adjustedPrice !== undefined ? item.adjustedPrice : inventoryItem ? inventoryItem.price : 0;
+                const total = price * item.quantity;
+                
+                return (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {inventoryItem?.name || "Unknown Item"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <input
+                        type="number"
+                        min="1"
+                        max={getRemainingQuantity(item.itemId) + item.quantity}
+                        value={item.quantity}
+                        onChange={(e) => handleQuantityChange(index, parseInt(e.target.value) || 1)}
+                        className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={price}
+                        onChange={(e) => handlePriceAdjustment(index, parseFloat(e.target.value) || 0)}
+                        className="w-24 rounded border border-gray-300 px-2 py-1 text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formatCurrency(total, currency)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
-                        onClick={handlePrintDocument}
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
                       >
-                        <Printer className="mr-1.5" size={16} />
-                        Print
+                        <Trash2 size={16} />
                       </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-gray-50">
+                <td colSpan={3} className="px-6 py-4 text-right text-sm font-medium text-gray-900">
+                  Total Amount:
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                  {formatCurrency(newInvoice.amount, currency)}
+                </td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-center py-6 border border-dashed border-gray-300 rounded-md mb-4">
+          <p className="text-gray-500">No items added yet</p>
+        </div>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-8 flex items-center justify-end space-x-4">
+    <button
+      type="button"
+      onClick={() => setIsCreatingInvoice(false)}
+      className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      disabled={isLoading || newInvoice.items.length === 0}
+      className="px-4 py-2 bg-blue-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
+    >
+      {isLoading ? "Creating..." : "Create Invoice"}
+    </button>
+  </div>
+</form>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Print Modal */}
+          <AnimatePresence>
+            {showPrintModal && printingInvoice && (
+              <>
+                <div className="fixed inset-0 bg-black bg-opacity-25 backdrop-blur-sm z-30" onClick={() => setShowPrintModal(false)}></div>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="fixed inset-0 overflow-y-auto z-40 flex items-center justify-center p-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">Print Invoice</h3>
                       <button
                         onClick={() => setShowPrintModal(false)}
                         className="text-gray-400 hover:text-gray-500 transition-colors"
@@ -868,18 +969,29 @@ export default function Billing() {
                         <X size={20} />
                       </button>
                     </div>
-                  </div>
-                  <div className="overflow-y-auto p-6 max-h-[calc(90vh-60px)]">
-                    <div ref={printRef} className="p-8 bg-white">
-                      <Print invoice={printingInvoice} inventory={inventory} invoiceNumber={""} invoiceItems={[]} payments={[]} customer={null} amountDue={0} amount={0} dueDate={""} status={"paid"} />
+                    <div className="overflow-y-auto p-6 max-h-[calc(90vh-60px)]">
+                      <div ref={printRef}>
+                        <Print 
+                        invoice={printingInvoice}
+                        inventory={inventory}
+                        currency={currency} payments={[]}                        />
+                      </div>
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={handlePrintDocument}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          <Printer className="mr-2" size={16} />
+                          Print
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
     </NavbarLayout>
   );
 }
