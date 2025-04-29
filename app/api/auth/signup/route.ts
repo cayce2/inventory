@@ -1,34 +1,31 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import clientPromise from "@/lib/mongodb"
-import { signupSchema } from "@/lib/validations"
-import { rateLimit } from "@/lib/rate-limiter"
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResponse = await rateLimit(req)
-    if (rateLimitResponse) {
-      return rateLimitResponse
+    const { name, email, phone, password } = await req.json()
+
+    if (!name || !email || !phone || !password) {
+      return NextResponse.json({ error: "Name, email, phone, and password are required" }, { status: 400 })
     }
 
-    const data = await req.json()
-
-    // Validate input data
-    try {
-      signupSchema.parse(data)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (validationError: any) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validationError.errors || validationError.message,
-        },
-        { status: 400 },
-      )
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
     }
 
-    const { name, email, phone, password } = data
+    // Validate phone number format (simple check for now)
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/
+    if (!phoneRegex.test(phone)) {
+      return NextResponse.json({ error: "Invalid phone number format" }, { status: 400 })
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters long" }, { status: 400 })
+    }
 
     const client = await clientPromise
     const db = client.db("inventory_management")
@@ -60,4 +57,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "An error occurred while creating the user" }, { status: 500 })
   }
 }
-
