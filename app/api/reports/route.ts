@@ -5,6 +5,7 @@ import { authMiddleware } from "@/lib/auth-middleware"
 import * as XLSX from "xlsx"
 import { ObjectId } from "mongodb"
 import { reportPeriodSchema } from "@/lib/validations"
+import bcrypt from "bcryptjs"
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +19,26 @@ export async function GET(req: NextRequest) {
     const period = url.searchParams.get("period") || "all"
     const startDate = url.searchParams.get("startDate")
     const endDate = url.searchParams.get("endDate")
+    const password = url.searchParams.get("password")
+
+    // Check if password is provided
+    if (!password) {
+      return NextResponse.json({ error: "Password required to download report" }, { status: 400 })
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    // Verify password
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+    if (!user || !user.reportPassword) {
+      return NextResponse.json({ error: "No report password set. Please set a password first." }, { status: 400 })
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.reportPassword)
+    if (!isPasswordValid) {
+      return NextResponse.json({ error: "Invalid password" }, { status: 401 })
+    }
 
     // Validate date formats if provided
     if (startDate && endDate) {
@@ -26,9 +47,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
       }
     }
-
-    const client = await clientPromise
-    const db = client.db("inventory_management")
 
     // Determine date range
     const now = new Date()
@@ -332,5 +350,83 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error fetching report data:", error)
     return NextResponse.json({ error: "An error occurred while fetching report data" }, { status: 500 })
+  }
+}
+
+// New endpoint to set/update report password
+export async function PUT(req: NextRequest) {
+  try {
+    const userId = await authMiddleware(req)
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const data = await req.json()
+    const { password, currentPassword } = data
+
+    if (!password || password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters long" }, { status: 400 })
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    // Get current user
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // If user already has a report password, verify current password
+    if (user.reportPassword && currentPassword) {
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.reportPassword)
+      if (!isCurrentPasswordValid) {
+        return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 })
+      }
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(password, 12)
+
+    // Update user with new report password
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { 
+        $set: { 
+          reportPassword: hashedPassword,
+          reportPasswordUpdatedAt: new Date()
+        }
+      }
+    )
+
+    return NextResponse.json({ message: "Report password updated successfully" }, { status: 200 })
+  } catch (error) {
+    console.error("Error updating report password:", error)
+    return NextResponse.json({ error: "An error occurred while updating the password" }, { status: 500 })
+  }
+}
+
+// New endpoint to check if user has a report password set
+export async function PATCH(req: NextRequest) {
+  try {
+    const userId = await authMiddleware(req)
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    const user = await db.collection("users").findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { reportPassword: 1 } }
+    )
+
+    return NextResponse.json({ 
+      hasReportPassword: !!user?.reportPassword 
+    }, { status: 200 })
+  } catch (error) {
+    console.error("Error checking report password:", error)
+    return NextResponse.json({ error: "An error occurred while checking password status" }, { status: 500 })
   }
 }
