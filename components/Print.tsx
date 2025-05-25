@@ -8,6 +8,7 @@ import { format } from "date-fns";
 interface InvoiceItem {
   itemId: string;
   quantity: number;
+  adjustedPrice?: number; // Added to support adjusted prices
 }
 
 interface InventoryItem {
@@ -47,19 +48,25 @@ interface PrintProps {
   dueDate?: string;
   status?: "paid" | "unpaid";
   invoiceNumber?: string;
-  currency: string
+  currency: string;
 }
 
-
-const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) => {
-  // Map items in invoice to their corresponding inventory details
+const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments, currency }) => {
+  // Map items in invoice to their corresponding inventory details with adjusted price support
   const invoiceItems = invoice.items.map((item) => {
     const inventoryItem = inventory.find((i) => i._id === item.itemId);
+    const basePrice = inventoryItem?.price || 0;
+    // Use adjusted price if available, otherwise fall back to inventory price
+    const finalPrice = item.adjustedPrice !== undefined ? item.adjustedPrice : basePrice;
+    const isPriceAdjusted = item.adjustedPrice !== undefined && item.adjustedPrice !== basePrice;
+    
     return {
       name: inventoryItem?.name || "Unknown Item",
       quantity: item.quantity,
-      price: inventoryItem?.price || 0,
-      total: (inventoryItem?.price || 0) * item.quantity,
+      originalPrice: basePrice,
+      price: finalPrice,
+      isPriceAdjusted,
+      total: finalPrice * item.quantity,
     };
   });
 
@@ -69,6 +76,10 @@ const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) =>
   const today = format(new Date(), "MMM d, yyyy");
   
   const isOverdue = new Date(invoice.dueDate) < new Date() && invoice.status === "unpaid";
+
+  const formatCurrency = (amount: number) => {
+    return `${currency} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   return (
     <Card className="max-w-3xl mx-auto shadow-lg border-0 rounded-xl overflow-hidden">
@@ -127,17 +138,40 @@ const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) =>
               <TableRow className="bg-gray-50">
                 <TableHead className="w-full md:w-1/2 py-3">Item</TableHead>
                 <TableHead className="text-right py-3">Qty</TableHead>
-                <TableHead className="text-right py-3">Price</TableHead>
+                <TableHead className="text-right py-3">Unit Price</TableHead>
                 <TableHead className="text-right py-3">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {invoiceItems.map((item, index) => (
                 <TableRow key={index} className="border-b border-gray-100">
-                  <TableCell className="font-medium py-4">{item.name}</TableCell>
+                  <TableCell className="font-medium py-4">
+                    <div>
+                      <div>{item.name}</div>
+                     {/* Uncomment if you want to show original price
+                        <div className="text-xs text-gray-500 mt-1">
+                          {item.isPriceAdjusted ? `Original Price: ${formatCurrency(item.originalPrice)}` : ""}
+                        </div>
+                      */}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right py-4">{item.quantity}</TableCell>
-                  <TableCell className="text-right py-4">KES {item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="text-right font-medium py-4">KES {item.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right py-4">
+                    <div>
+                      <div className={item.isPriceAdjusted ? "font-medium text-blue-600" : ""}>
+                        {formatCurrency(item.price)}
+                      </div>
+                      {/* Uncomment if you want to show original price}
+                      {item.isPriceAdjusted && (
+                        <div className="text-xs text-gray-500">
+                          (Adjusted price: {formatCurrency(item.originalPrice)}) 
+                        </div>
+                      )}*/}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-medium py-4">
+                    {formatCurrency(item.total)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -152,7 +186,7 @@ const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) =>
                 {payments.map((payment, index) => (
                   <div key={index} className="flex justify-between items-center">
                     <span className="text-gray-600">{format(new Date(payment.date), "MMM d, yyyy")}</span>
-                    <span className="font-medium text-emerald-600">KES {payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="font-medium text-emerald-600">{formatCurrency(payment.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -163,19 +197,19 @@ const InvoicePrint: React.FC<PrintProps> = ({ invoice, inventory, payments }) =>
             <div className="bg-gray-50 p-5 rounded-lg shadow-sm">
               <div className="flex justify-between mb-3">
                 <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">KES {invoice.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="font-medium">{formatCurrency(invoice.amount)}</span>
               </div>
               {payments.length > 0 && (
                 <div className="flex justify-between mb-3">
                   <span className="text-gray-600">Amount Paid:</span>
-                  <span className="text-emerald-600 font-medium">-KES {totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-emerald-600 font-medium">-{formatCurrency(totalPaid)}</span>
                 </div>
               )}
               <Separator className="my-3" />
               <div className="flex justify-between font-bold text-lg mt-2">
                 <span>{invoice.status === "paid" ? "Total Paid:" : "Balance Due:"}</span>
                 <span className={invoice.status === "paid" ? "text-emerald-600" : "text-rose-600"}>
-                  KES {(invoice.status === "paid" ? invoice.amount : remainingBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatCurrency(invoice.status === "paid" ? invoice.amount : remainingBalance)}
                 </span>
               </div>
             </div>
