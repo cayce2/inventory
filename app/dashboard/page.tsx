@@ -496,7 +496,11 @@ export default function Dashboard() {
                   </CardContent>
                   {!loading && stats.lowStockItems.length > 0 && (
                     <CardFooter className="bg-gray-50 py-3 px-6 border-t">
-                      <Button variant="outline" size="sm" className="ml-auto">
+                      <Button variant="ghost" 
+                        size="sm" 
+                        className="text-indigo-600 hover:text-indigo-800"
+                        onClick={() => window.location.href = '/inventory'}
+                        >
                         View all inventory <ArrowRight className="ml-1 h-4 w-4" />
                       </Button>
                     </CardFooter>
