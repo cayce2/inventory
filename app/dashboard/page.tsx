@@ -26,14 +26,26 @@ import { motion } from "framer-motion";
 
 interface DashboardStats {
   totalItems: number;
+  totalItemsTrend: number | null;
   lowStockItems: Array<{
     _id: string;
     name: string;
     quantity: number;
   }>;
+  lowStockTrend: number | null;
   totalIncome: number;
+  revenueTrend: number | null;
   unpaidInvoices: number;
+  unpaidInvoicesTrend: number | null;
   trendData: Array<{ name: string; value: number }>;
+  revenueByCategory?: Array<{ name: string; value: number }>;
+  kpiData?: {
+    inventoryTurnover: number;
+    revenueTarget: number;
+    invoiceCollection: number;
+    stockCapacity: number;
+  };
+  lastUpdated?: string;
 }
 
 interface StatCardProps {
@@ -41,7 +53,7 @@ interface StatCardProps {
   value: string | number;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   description?: string;
-  trend?: number;
+  trend?: number | null;
   loading: boolean;
   bgColor: string;
   iconBgColor: string;
@@ -59,9 +71,13 @@ const formatCurrency = (value: number, currencyCode = 'KES') => {
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalItems: 0,
+    totalItemsTrend: null,
     lowStockItems: [],
+    lowStockTrend: null,
     totalIncome: 0,
+    revenueTrend: null,
     unpaidInvoices: 0,
+    unpaidInvoicesTrend: null,
     trendData: [],
   });
   const [loading, setLoading] = useState(true);
@@ -129,11 +145,14 @@ export default function Dashboard() {
             {description && !loading && (
               <p className="text-xs text-gray-600">{description}</p>
             )}
-            {trend !== undefined && !loading && (
+            {trend !== undefined && trend !== null && !loading && (
               <div className={`flex items-center text-xs ${trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 <TrendingUp className={`h-3 w-3 mr-1 ${trend >= 0 ? '' : 'rotate-180'}`} />
                 <span>{Math.abs(trend)}% {trend >= 0 ? 'increase' : 'decrease'} from last month</span>
               </div>
+            )}
+            {trend === null && !loading && (
+              <p className="text-xs text-gray-500">No previous data for comparison</p>
             )}
           </div>
           <div className={`p-3 rounded-full ${iconBgColor}`}>
@@ -163,6 +182,11 @@ export default function Dashboard() {
                 <p className="mt-2 text-gray-600 max-w-2xl">
                   Get a quick overview of your business performance and inventory status
                 </p>
+                {stats.lastUpdated && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Last updated: {new Date(stats.lastUpdated).toLocaleString()}
+                  </p>
+                )}
               </div>
               <Button 
                 onClick={fetchDashboardStats}
@@ -203,7 +227,7 @@ export default function Dashboard() {
                 value={stats.totalItems}
                 icon={Package}
                 description="Total items tracked in inventory"
-                trend={2.5}
+                trend={stats.totalItemsTrend}
                 loading={loading}
                 bgColor="bg-blue-50"
                 iconBgColor="bg-blue-100"
@@ -220,7 +244,7 @@ export default function Dashboard() {
                 value={stats.lowStockItems.length}
                 description="Items requiring immediate attention"
                 icon={AlertTriangle}
-                trend={-1.8}
+                trend={stats.lowStockTrend}
                 loading={loading}
                 bgColor="bg-amber-50"
                 iconBgColor="bg-amber-100"
@@ -237,7 +261,7 @@ export default function Dashboard() {
                 value={formatAmount(stats.totalIncome)}
                 description="Year-to-date revenue"
                 icon={DollarSign}
-                trend={4.2}
+                trend={stats.revenueTrend}
                 loading={loading}
                 bgColor="bg-green-50"
                 iconBgColor="bg-green-100"
@@ -254,7 +278,7 @@ export default function Dashboard() {
                 value={stats.unpaidInvoices}
                 description="Outstanding payments to collect"
                 icon={FileText}
-                trend={-0.7}
+                trend={stats.unpaidInvoicesTrend}
                 loading={loading}
                 bgColor="bg-purple-50"
                 iconBgColor="bg-purple-100"
@@ -263,6 +287,55 @@ export default function Dashboard() {
             </motion.div>
           </div>
 
+          {/* KPI Section - if data exists 
+          {stats.kpiData && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.5 }}
+              className="mb-10"
+            >
+              <Card className="shadow-sm border border-gray-100">
+                <CardHeader className="pb-2 border-b">
+                  <CardTitle className="text-xl text-gray-900">Key Performance Indicators</CardTitle>
+                  <CardDescription>Business performance metrics at a glance</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="text-center">
+                      <div className="mb-2">
+                        <div className="text-2xl font-bold text-gray-900">{stats.kpiData.inventoryTurnover}%</div>
+                        <div className="text-sm text-gray-600">Inventory Turnover</div>
+                      </div>
+                      <Progress value={stats.kpiData.inventoryTurnover} className="h-2" />
+                    </div>
+                    <div className="text-center">
+                      <div className="mb-2">
+                        <div className="text-2xl font-bold text-gray-900">{stats.kpiData.revenueTarget}%</div>
+                        <div className="text-sm text-gray-600">Revenue Target</div>
+                      </div>
+                      <Progress value={stats.kpiData.revenueTarget} className="h-2" />
+                    </div>
+                    <div className="text-center">
+                      <div className="mb-2">
+                        <div className="text-2xl font-bold text-gray-900">{stats.kpiData.invoiceCollection}%</div>
+                        <div className="text-sm text-gray-600">Invoice Collection</div>
+                      </div>
+                      <Progress value={stats.kpiData.invoiceCollection} className="h-2" />
+                    </div>
+                    <div className="text-center">
+                      <div className="mb-2">
+                        <div className="text-2xl font-bold text-gray-900">{stats.kpiData.stockCapacity}%</div>
+                        <div className="text-sm text-gray-600">Stock Capacity</div>
+                      </div>
+                      <Progress value={stats.kpiData.stockCapacity} className="h-2" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+            */}
           {/* Main content with tabs */}
           <Tabs 
             defaultValue="overview" 
@@ -345,7 +418,9 @@ export default function Dashboard() {
                 </CardContent>
                 <CardFooter className="bg-gray-50 py-3 px-6 border-t">
                   <div className="w-full flex justify-between items-center">
-                    <p className="text-sm text-gray-500">Data updated on March 23, 2025</p>
+                    <p className="text-sm text-gray-500">
+                      Data updated on {stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleDateString() : 'N/A'}
+                    </p>
                       <Button 
                         variant="ghost" 
                         size="sm" 
