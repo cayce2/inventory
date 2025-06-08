@@ -11,6 +11,8 @@ export const isValidObjectId = (id: string): boolean => {
   }
 }
 
+
+
 // Custom Zod refinement for ObjectId validation
 export const objectIdSchema = z.string().refine(isValidObjectId, {
   message: "Invalid ObjectId format",
@@ -139,3 +141,44 @@ export const subscriptionActionSchema = z.object({
   action: z.enum(["initiate", "renew", "cancel"]),
 })
 
+// New schemas for sub-user management
+export const subUserCreateSchema = z.object({
+  name: z.string()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters")
+    .trim(),
+  email: z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim(),
+  role: z.enum(['ADMIN', 'EDITOR', 'VIEWER', 'MODERATOR'], {
+    errorMap: () => ({ message: "Role must be one of: ADMIN, EDITOR, VIEWER, MODERATOR" })
+  })
+})
+
+export const subUserUpdateSchema = z.object({
+  name: z.string()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters")
+    .trim()
+    .optional(),
+  email: z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim()
+    .optional(),
+  role: z.enum(['ADMIN', 'EDITOR', 'VIEWER', 'MODERATOR'], {
+    errorMap: () => ({ message: "Role must be one of: ADMIN, EDITOR, VIEWER, MODERATOR" })
+  }).optional()
+}).refine((data) => {
+  // At least one field must be provided
+  return data.name || data.email || data.role
+}, {
+  message: "At least one field (name, email, or role) must be provided for update"
+})
+
+export const subUserStatusSchema = z.object({
+  status: z.enum(['active', 'inactive', 'pending'], {
+    errorMap: () => ({ message: "Status must be one of: active, inactive, pending" })
+  })
+})

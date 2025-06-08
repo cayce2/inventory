@@ -131,7 +131,7 @@ function LoginForm() {
         </Alert>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-">
         {isSuspended && (
           <div className="mb-4 text-red-500">
             Your account has been suspended. Please make a payment or call 0111363697 to reactivate your account.
