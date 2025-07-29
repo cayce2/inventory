@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Plus, Edit2, Trash2, Save, ShoppingBag, Search, ArrowUpDown, Loader } from "lucide-react"
+import { Plus, Edit2, Trash2, Save, ShoppingBag, Search, ArrowUpDown, Loader, QrCode, X, Check, Hash } from "lucide-react"
 import NavbarLayout from "@/components/NavbarLayout"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -20,11 +20,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface InventoryItem {
   image: any
   _id: string
   name: string
+  sku: string
   quantity: number
   price: number
   imageUrl: string
@@ -33,6 +35,7 @@ interface InventoryItem {
 
 const defaultNewItem = {
   name: "",
+  sku: "",
   quantity: 0,
   price: 0,
   imageUrl: "",
@@ -47,6 +50,21 @@ const formatCurrency = (value: number, currencyCode = 'KES') => {
   })}`;
 };
 
+// SKU validation utility
+const validateSKU = (sku: string) => {
+  // SKU should be alphanumeric, can include hyphens and underscores
+  const skuPattern = /^[A-Za-z0-9\-_]+$/;
+  return skuPattern.test(sku) && sku.length >= 3 && sku.length <= 50;
+};
+
+// Generate random SKU
+const generateSKU = (name: string) => {
+  const prefix = name.replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase();
+  const timestamp = Date.now().toString().slice(-6);
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${prefix}-${timestamp}-${random}`;
+};
+
 export default function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([])
@@ -54,10 +72,11 @@ export default function Inventory() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [itemDialogOpen, setItemDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [scannerDialogOpen, setScannerDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [sortField, setSortField] = useState<"name" | "price" | "quantity">("name")
+  const [sortField, setSortField] = useState<"name" | "price" | "quantity" | "sku">("name")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [filterStatus, setFilterStatus] = useState<"all" | "inStock" | "lowStock" | "outOfStock">("all")
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
@@ -65,7 +84,17 @@ export default function Inventory() {
   const [restockQuantity, setRestockQuantity] = useState<number>(10)
   const [restockDialogOpen, setRestockDialogOpen] = useState(false)
   const [itemToRestock, setItemToRestock] = useState<string | null>(null)
+  
+  // Scanner-related state
+  const [isScanning, setIsScanning] = useState(false)
+  const [scannedCode, setScannedCode] = useState("")
+  const [scanError, setScanError] = useState("")
+  const [skuValidation, setSkuValidation] = useState({ isValid: true, message: "" })
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const currency = 'KES'; 
   const router = useRouter()
 
@@ -82,10 +111,11 @@ export default function Inventory() {
     // Apply filtering and sorting
     let result = [...inventory]
     
-    // Apply search filter
+    // Apply search filter (now includes SKU search)
     if (searchQuery) {
       result = result.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.sku && item.sku.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     }
     
@@ -99,7 +129,7 @@ export default function Inventory() {
       })
     }
     
-    // Apply sorting
+    // Apply sorting (now includes SKU sorting)
     result.sort((a, b) => {
       let comparison = 0
       if (sortField === "name") {
@@ -108,12 +138,33 @@ export default function Inventory() {
         comparison = a.price - b.price
       } else if (sortField === "quantity") {
         comparison = a.quantity - b.quantity
+      } else if (sortField === "sku") {
+        comparison = a.sku.localeCompare(b.sku)
       }
       return sortDirection === "asc" ? comparison : -comparison
     })
     
     setFilteredInventory(result)
   }, [inventory, searchQuery, sortField, sortDirection, filterStatus])
+
+  // Cleanup video stream when component unmounts or scanner closes
+  useEffect(() => {
+    return () => {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [videoStream])
+
+  // SKU validation effect
+  useEffect(() => {
+    const currentSku = editingItem ? editingItem.sku : newItem.sku
+    if (currentSku) {
+      validateSKUUniqueness(currentSku)
+    } else {
+      setSkuValidation({ isValid: true, message: "" })
+    }
+  }, [newItem.sku, editingItem?.sku, inventory])
 
   const fetchInventory = async () => {
     try {
@@ -134,6 +185,113 @@ export default function Inventory() {
     }
   }
 
+  const validateSKUUniqueness = async (sku: string) => {
+    if (!validateSKU(sku)) {
+      setSkuValidation({
+        isValid: false,
+        message: "SKU must be 3-50 characters long and contain only letters, numbers, hyphens, and underscores"
+      })
+      return
+    }
+
+    // Check if SKU already exists (excluding current item being edited)
+    const existingItem = inventory.find(item => 
+      item.sku === sku && item._id !== (editingItem?._id || '')
+    )
+
+    if (existingItem) {
+      setSkuValidation({
+        isValid: false,
+        message: "This SKU already exists in your inventory"
+      })
+    } else {
+      setSkuValidation({ isValid: true, message: "" })
+    }
+  }
+
+  const startCamera = async () => {
+    try {
+      setScanError("")
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      })
+      setVideoStream(stream)
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
+      setIsScanning(true)
+    } catch (error) {
+      setScanError("Unable to access camera. Please check permissions or enter SKU manually.")
+      console.error("Camera access error:", error)
+    }
+  }
+
+  const stopCamera = () => {
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop())
+      setVideoStream(null)
+    }
+    setIsScanning(false)
+  }
+
+  const captureFrame = () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+    const video = videoRef.current
+    const context = canvas.getContext('2d')
+
+    if (context) {
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      context.drawImage(video, 0, 0)
+      
+      // In a real implementation, you would use a barcode scanning library here
+      // For demonstration, we'll simulate scanning with manual input
+      const simulatedScan = prompt("Scanner simulation - Enter barcode/SKU:")
+      if (simulatedScan) {
+        setScannedCode(simulatedScan)
+        handleScannedCode(simulatedScan)
+      }
+    }
+  }
+
+  const handleScannedCode = (code: string) => {
+    // Check if this is a new item or existing item
+    const existingItem = inventory.find(item => item.sku === code)
+    
+    if (existingItem) {
+      // If item exists, ask if user wants to restock
+      const shouldRestock = confirm(`Item "${existingItem.name}" (SKU: ${code}) already exists. Would you like to restock it?`)
+      if (shouldRestock) {
+        openRestockDialog(existingItem._id)
+      }
+    } else {
+      // If new item, populate the form
+      if (editingItem) {
+        setEditingItem({ ...editingItem, sku: code })
+      } else {
+        setNewItem({ ...newItem, sku: code })
+      }
+    }
+    
+    stopCamera()
+    setScannerDialogOpen(false)
+  }
+
+  const openScannerDialog = () => {
+    setScannerDialogOpen(true)
+    setScannedCode("")
+    setScanError("")
+  }
+
+  const closeScannerDialog = () => {
+    stopCamera()
+    setScannerDialogOpen(false)
+  }
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -144,11 +302,17 @@ export default function Inventory() {
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!skuValidation.isValid) {
+      return
+    }
+
     try {
       setIsLoading(true)
       const token = localStorage.getItem("token")
       const formData = new FormData()
       formData.append("name", newItem.name)
+      formData.append("sku", newItem.sku)
       formData.append("quantity", newItem.quantity.toString())
       formData.append("price", newItem.price.toString())
       formData.append("lowStockThreshold", newItem.lowStockThreshold.toString())
@@ -179,7 +343,7 @@ export default function Inventory() {
 
   const handleEditItem = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingItem) return
+    if (!editingItem || !skuValidation.isValid) return
 
     try {
       setIsLoading(true)
@@ -187,6 +351,7 @@ export default function Inventory() {
       const formData = new FormData()
       formData.append("_id", editingItem._id)
       formData.append("name", editingItem.name)
+      formData.append("sku", editingItem.sku)
       formData.append("quantity", editingItem.quantity.toString())
       formData.append("price", editingItem.price.toString())
       formData.append("lowStockThreshold", editingItem.lowStockThreshold.toString())
@@ -294,7 +459,7 @@ export default function Inventory() {
     }
   }
 
-  const toggleSort = (field: "name" | "price" | "quantity") => {
+  const toggleSort = (field: "name" | "price" | "quantity" | "sku") => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
     } else {
@@ -307,6 +472,20 @@ export default function Inventory() {
     return formatCurrency(value, currency);
   };
 
+  const generateSkuForItem = () => {
+    const currentName = editingItem ? editingItem.name : newItem.name
+    if (currentName) {
+      const generatedSku = generateSKU(currentName)
+      if (editingItem) {
+        setEditingItem({ ...editingItem, sku: generatedSku })
+      } else {
+        setNewItem({ ...newItem, sku: generatedSku })
+      }
+    } else {
+      alert("Please enter a product name first to generate SKU")
+    }
+  }
+
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -314,15 +493,24 @@ export default function Inventory() {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-              <p className="text-gray-500 mt-1">Manage your products and stock levels</p>
+              <p className="text-gray-500 mt-1">Manage your products and stock levels with SKU tracking</p>
             </div>
-            <Button 
-              onClick={openAddDialog} 
-              className="self-start bg-indigo-600 hover:bg-indigo-700"
-              size="lg"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Add New Item
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={openScannerDialog} 
+                variant="outline"
+                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+              >
+                <QrCode className="mr-2 h-4 w-4" /> Scan Barcode
+              </Button>
+              <Button 
+                onClick={openAddDialog} 
+                className="bg-indigo-600 hover:bg-indigo-700"
+                size="lg"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add New Item
+              </Button>
+            </div>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
@@ -330,7 +518,7 @@ export default function Inventory() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                 <Input
-                  placeholder="Search products..."
+                  placeholder="Search products or SKU..."
                   className="pl-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -363,6 +551,9 @@ export default function Inventory() {
                   <DropdownMenuContent align="end" className="w-40">
                     <DropdownMenuItem onClick={() => toggleSort("name")}>
                       Name {sortField === "name" && (sortDirection === "asc" ? "↑" : "↓")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => toggleSort("sku")}>
+                      SKU {sortField === "sku" && (sortDirection === "asc" ? "↑" : "↓")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => toggleSort("price")}>
                       Price {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
@@ -416,30 +607,34 @@ export default function Inventory() {
                     return (
                       <Card key={item._id} className="overflow-hidden border border-gray-200 transition-all hover:shadow-md group">
                         <div className="relative h-48 overflow-hidden bg-white flex items-center justify-center">
-  <Image
-    src={
-      item.image
-        ? `data:image/jpeg;base64,${item.image}`
-        : item.imageUrl || "/placeholder.svg"
-    }
-    alt={item.name}
-    width={400}
-    height={300}
-    className="w-full h-full object-contain transition-transform group-hover:scale-105"
-    onError={(e) => {
-      const target = e.target as HTMLImageElement;
-      target.src = "/placeholder.svg";
-    }}
-    priority
-  />
-  <div className="absolute top-2 right-2">
-    <Badge className={`${stockStatus.color} text-white`}>
-      {stockStatus.label}
-    </Badge>
-  </div>
-</div>
+                          <Image
+                            src={
+                              item.image
+                                ? `data:image/jpeg;base64,${item.image}`
+                                : item.imageUrl || "/placeholder.svg"
+                            }
+                            alt={item.name}
+                            width={400}
+                            height={300}
+                            className="w-full h-full object-contain transition-transform group-hover:scale-105"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = "/placeholder.svg";
+                            }}
+                            priority
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Badge className={`${stockStatus.color} text-white`}>
+                              {stockStatus.label}
+                            </Badge>
+                          </div>
+                        </div>
                         <CardContent className="p-6">
-                          <h3 className="text-xl font-semibold mb-3 line-clamp-1 text-gray-900">{item.name}</h3>
+                          <h3 className="text-xl font-semibold mb-2 line-clamp-1 text-gray-900">{item.name}</h3>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Hash className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm font-mono text-gray-600 bg-gray-100 px-2 py-1 rounded">{item.sku}</span>
+                          </div>
                           
                           <div className="space-y-4">
                             <div>
@@ -510,12 +705,21 @@ export default function Inventory() {
                         Clear Filters
                       </Button>
                     ) : (
-                      <Button 
-                        onClick={openAddDialog}
-                        className="bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        <Plus className="h-4 w-4 mr-2" /> Add Your First Item
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={openScannerDialog}
+                          variant="outline"
+                          className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                        >
+                          <QrCode className="h-4 w-4 mr-2" /> Scan Item
+                        </Button>
+                        <Button 
+                          onClick={openAddDialog}
+                          className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          <Plus className="h-4 w-4 mr-2" /> Add Your First Item
+                        </Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -529,6 +733,14 @@ export default function Inventory() {
                     <thead>
                       <tr className="border-b bg-gray-50">
                         <th className="text-left p-4 font-medium text-gray-600">Product</th>
+                        <th className="text-left p-4 font-medium text-gray-600 cursor-pointer" onClick={() => toggleSort("sku")}>
+                          <div className="flex items-center">
+                            SKU
+                            {sortField === "sku" && (
+                              <ArrowUpDown className="ml-1 h-4 w-4" />
+                            )}
+                          </div>
+                        </th>
                         <th className="text-left p-4 font-medium text-gray-600 cursor-pointer" onClick={() => toggleSort("price")}>
                           <div className="flex items-center">
                             Price
@@ -559,6 +771,7 @@ export default function Inventory() {
                                 <Skeleton className="h-4 w-32" />
                               </div>
                             </td>
+                            <td className="p-4"><Skeleton className="h-4 w-20" /></td>
                             <td className="p-4"><Skeleton className="h-4 w-16" /></td>
                             <td className="p-4"><Skeleton className="h-4 w-12" /></td>
                             <td className="p-4"><Skeleton className="h-6 w-20" /></td>
@@ -592,6 +805,9 @@ export default function Inventory() {
                                   </div>
                                   <span className="font-medium text-gray-900">{item.name}</span>
                                 </div>
+                              </td>
+                              <td className="p-4">
+                                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{item.sku}</span>
                               </td>
                               <td className="p-4 font-medium">{formatAmount(item.price)}</td>
                               <td className="p-4">
@@ -641,7 +857,7 @@ export default function Inventory() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center">
+                          <td colSpan={6} className="p-8 text-center">
                             <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-3">
                               <ShoppingBag className="h-6 w-6 text-indigo-500" />
                             </div>
@@ -659,13 +875,23 @@ export default function Inventory() {
                                 Clear Filters
                               </Button>
                             ) : (
-                              <Button 
-                                size="sm"
-                                onClick={openAddDialog}
-                                className="bg-indigo-600 hover:bg-indigo-700"
-                              >
-                                <Plus className="h-4 w-4 mr-2" /> Add Item
-                              </Button>
+                              <div className="flex gap-2 justify-center">
+                                <Button 
+                                  size="sm"
+                                  onClick={openScannerDialog}
+                                  variant="outline"
+                                  className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                >
+                                  <QrCode className="h-4 w-4 mr-2" /> Scan
+                                </Button>
+                                <Button 
+                                  size="sm"
+                                  onClick={openAddDialog}
+                                  className="bg-indigo-600 hover:bg-indigo-700"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" /> Add Item
+                                </Button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -681,7 +907,7 @@ export default function Inventory() {
 
       {/* Item Add/Edit Dialog */}
       <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">
               {editingItem ? "Edit Inventory Item" : "Add New Inventory Item"}
@@ -703,10 +929,56 @@ export default function Inventory() {
                   placeholder="Enter product name"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="sku"
+                    value={editingItem ? editingItem.sku : newItem.sku}
+                    onChange={(e) =>
+                      editingItem
+                        ? setEditingItem({ ...editingItem, sku: e.target.value.toUpperCase() })
+                        : setNewItem({ ...newItem, sku: e.target.value.toUpperCase() })
+                    }
+                    required
+                    placeholder="e.g., PROD-123456-ABC"
+                    className={`flex-1 ${!skuValidation.isValid ? 'border-red-300' : ''}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={generateSkuForItem}
+                    className="px-3"
+                  >
+                    <Hash className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={openScannerDialog}
+                    className="px-3"
+                  >
+                    <QrCode className="h-4 w-4" />
+                  </Button>
+                </div>
+                {!skuValidation.isValid && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertDescription className="text-red-700 text-sm">
+                      {skuValidation.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <p className="text-sm text-gray-500">
+                  SKU must be unique and 3-50 characters (letters, numbers, hyphens, underscores)
+                </p>
+              </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price ($)</Label>
+                  <Label htmlFor="price">Price ({currency})</Label>
                   <Input
                     id="price"
                     type="number"
@@ -793,7 +1065,7 @@ export default function Inventory() {
             </Button>
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !skuValidation.isValid}
               className="bg-indigo-600 hover:bg-indigo-700"
             >
               {isLoading ? (
@@ -810,6 +1082,100 @@ export default function Inventory() {
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    {/* Scanner Dialog */}
+    <Dialog open={scannerDialogOpen} onOpenChange={closeScannerDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            Barcode Scanner
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {scanError && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertDescription className="text-red-700">
+                {scanError}
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {!isScanning ? (
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mx-auto">
+                <QrCode className="h-8 w-8 text-indigo-500" />
+              </div>
+              <p className="text-gray-600">
+                Use your camera to scan a barcode or QR code to automatically fill in the SKU field.
+              </p>
+              <Button onClick={startCamera} className="w-full">
+                <QrCode className="mr-2 h-4 w-4" />
+                Start Camera
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative">
+                <video
+                  ref={videoRef}
+                  className="w-full h-64 bg-black rounded-lg"
+                  autoPlay
+                  playsInline
+                />
+                <canvas ref={canvasRef} className="hidden" />
+                
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-48 border-2 border-white border-dashed rounded-lg opacity-50"></div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button onClick={captureFrame} className="flex-1">
+                  <QrCode className="mr-2 h-4 w-4" />
+                  Scan Code
+                </Button>
+                <Button variant="outline" onClick={stopCamera}>
+                  <X className="mr-2 h-4 w-4" />
+                  Stop
+                </Button>
+              </div>
+              
+              <p className="text-sm text-gray-500 text-center">
+                Position the barcode within the frame and click &quot;Scan Code
+              </p>
+            </div>
+          )}
+          
+          <div className="border-t pt-4">
+            <Label htmlFor="manualSku">Or enter SKU manually:</Label>
+            <div className="flex gap-2 mt-2">
+              <Input
+                id="manualSku"
+                value={scannedCode}
+                onChange={(e) => setScannedCode(e.target.value.toUpperCase())}
+                placeholder="Enter SKU manually"
+                className="flex-1"
+              />
+              <Button 
+                onClick={() => scannedCode && handleScannedCode(scannedCode)}
+                disabled={!scannedCode}
+                size="sm"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={closeScannerDialog}>
+            Cancel
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 
