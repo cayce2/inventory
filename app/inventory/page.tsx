@@ -73,7 +73,7 @@ const generateSKU = (name: string) => {
   return `${prefix}-${timestamp}-${random}`;
 };
 
-// Load QuaggaJS library
+// Load QuaggaJS library from multiple CDN sources
 const loadQuaggaJS = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     if (window.Quagga) {
@@ -81,17 +81,54 @@ const loadQuaggaJS = (): Promise<void> => {
       return;
     }
     
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js';
-    script.onload = () => {
-      if (window.Quagga) {
-        resolve();
-      } else {
-        reject(new Error('Failed to load Quagga'));
+    // Try multiple CDN sources
+    const cdnSources = [
+      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js',
+      'https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js',
+      'https://unpkg.com/quagga@0.12.1/dist/quagga.min.js'
+    ];
+    
+    let currentIndex = 0;
+    
+    const tryLoadScript = () => {
+      if (currentIndex >= cdnSources.length) {
+        reject(new Error('All CDN sources failed to load QuaggaJS'));
+        return;
       }
+      
+      const script = document.createElement('script');
+      script.src = cdnSources[currentIndex];
+      script.async = true;
+      
+      script.onload = () => {
+        // Wait a moment for the library to initialize
+        setTimeout(() => {
+          if (window.Quagga) {
+            console.log(`QuaggaJS loaded successfully from: ${cdnSources[currentIndex]}`);
+            resolve();
+          } else {
+            currentIndex++;
+            tryLoadScript();
+          }
+        }, 100);
+      };
+      
+      script.onerror = () => {
+        console.warn(`Failed to load QuaggaJS from: ${cdnSources[currentIndex]}`);
+        currentIndex++;
+        tryLoadScript();
+      };
+      
+      // Remove any existing script tags first
+      const existingScript = document.querySelector('script[src*="quagga"]');
+      if (existingScript) {
+        existingScript.remove();
+      }
+      
+      document.head.appendChild(script);
     };
-    script.onerror = () => reject(new Error('Failed to load Quagga script'));
-    document.head.appendChild(script);
+    
+    tryLoadScript();
   });
 };
 
@@ -137,13 +174,27 @@ export default function Inventory() {
     }
     fetchInventory()
     
-    // Load QuaggaJS
+    // Load QuaggaJS with better error handling
+    console.log('Loading barcode scanner library...');
     loadQuaggaJS()
       .then(() => {
+        console.log('QuaggaJS loaded successfully');
         setQuaggaLoaded(true)
       })
       .catch((error) => {
         console.error('Failed to load barcode scanner:', error)
+        // Set a timeout to try again after 5 seconds
+        setTimeout(() => {
+          console.log('Retrying to load QuaggaJS...');
+          loadQuaggaJS()
+            .then(() => {
+              console.log('QuaggaJS loaded successfully on retry');
+              setQuaggaLoaded(true)
+            })
+            .catch((retryError) => {
+              console.error('Failed to load barcode scanner after retry:', retryError)
+            })
+        }, 5000);
       })
   }, [router])
 
@@ -254,7 +305,7 @@ export default function Inventory() {
 
   const startBarcodeScanner = async () => {
     if (!quaggaLoaded || !scannerRef.current) {
-      setScanError("Barcode scanner library not loaded")
+      setScanError("Barcode scanner library not loaded. Please wait or try again.")
       return
     }
 
@@ -263,24 +314,46 @@ export default function Inventory() {
       setScanSuccess(false)
       setIsScanning(true)
 
-      // Initialize Quagga
+      // Check if Quagga is actually available
+      if (!window.Quagga) {
+        setScanError("Scanner library not available. Please refresh the page.")
+        setIsScanning(false)
+        return
+      }
+
+      // Initialize Quagga with more robust configuration
       window.Quagga.init({
         inputStream: {
           name: "Live",
           type: "LiveStream",
           target: scannerRef.current,
           constraints: {
-            width: 480,
-            height: 320,
-            facingMode: "environment" // Use back camera on mobile
+            width: { min: 320, ideal: 480, max: 640 },
+            height: { min: 240, ideal: 320, max: 480 },
+            facingMode: "environment",
+            aspectRatio: { min: 1, max: 2 }
           }
         },
         locator: {
           patchSize: "medium",
           halfSample: true
         },
-        numOfWorkers: 2,
+        numOfWorkers: navigator.hardwareConcurrency || 2,
         frequency: 10,
+        debug: {
+          showCanvas: false,
+          showPatches: false,
+          showFoundPatches: false,
+          showSkeleton: false,
+          showLabels: false,
+          showPatchLabels: false,
+          showRemainingPatchLabels: false,
+          boxFromPatches: {
+            showTransformed: false,
+            showTransformedBox: false,
+            showBB: false
+          }
+        },
         decoder: {
           readers: [
             "code_128_reader",
@@ -291,40 +364,61 @@ export default function Inventory() {
             "codabar_reader",
             "upc_reader",
             "upc_e_reader",
-            "i2of5_reader"
+            "i2of5_reader",
+            "2of5_reader"
           ]
         },
         locate: true
       }, (err: any) => {
         if (err) {
           console.error("QuaggaJS init error:", err)
-          setScanError("Failed to initialize camera. Please check permissions.")
+          setScanError(`Failed to initialize camera: ${err.message || 'Unknown error'}. Please check camera permissions.`)
           setIsScanning(false)
           return
         }
 
+        console.log("QuaggaJS initialized successfully");
+        
         // Start scanning
-        window.Quagga.start()
+        try {
+          window.Quagga.start()
+          console.log("QuaggaJS started successfully");
+        } catch (startError) {
+          console.error("QuaggaJS start error:", startError)
+          setScanError("Failed to start camera. Please check permissions.")
+          setIsScanning(false)
+          return
+        }
 
         // Add detection handler
         window.Quagga.onDetected((result: any) => {
-          const code = result.codeResult.code
-          if (code) {
-            handleScannedCode(code)
+          if (result && result.codeResult && result.codeResult.code) {
+            const code = result.codeResult.code
+            console.log("Barcode detected:", code)
+            
+            // Add confidence check
+            if (result.codeResult.confidence && result.codeResult.confidence > 80) {
+              handleScannedCode(code)
+            }
           }
         })
       })
     } catch (error) {
-      console.error("Scanner error:", error)
-      setScanError("Unable to access camera. Please check permissions.")
+      console.error("Scanner initialization error:", error)
+      setScanError(`Scanner error: ${error instanceof Error ? error.message : 'Unknown error'}`)
       setIsScanning(false)
     }
   }
 
   const stopBarcodeScanner = () => {
-    if (window.Quagga && isScanning) {
-      window.Quagga.stop()
-      window.Quagga.offDetected()
+    try {
+      if (window.Quagga && isScanning) {
+        window.Quagga.stop()
+        window.Quagga.offDetected()
+        console.log("QuaggaJS stopped successfully")
+      }
+    } catch (error) {
+      console.error("Error stopping scanner:", error)
     }
     setIsScanning(false)
     setScanSuccess(false)
@@ -1213,18 +1307,40 @@ export default function Inventory() {
               <p className="text-gray-600">
                 Use your camera to scan a barcode or QR code to automatically detect the SKU.
               </p>
-              <Button 
-                onClick={startBarcodeScanner} 
-                className="w-full"
-                disabled={!quaggaLoaded}
-              >
-                <QrCode className="mr-2 h-4 w-4" />
-                {quaggaLoaded ? 'Start Camera' : 'Loading Scanner...'}
-              </Button>
-              {!quaggaLoaded && (
-                <p className="text-sm text-gray-500">
-                  Loading barcode scanner library...
-                </p>
+              
+              {!quaggaLoaded ? (
+                <div className="space-y-3">
+                  <div className="flex justify-center">
+                    <Loader className="h-6 w-6 animate-spin text-indigo-500" />
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Loading barcode scanner library... This may take a moment.
+                  </p>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      // Manual retry
+                      loadQuaggaJS()
+                        .then(() => {
+                          setQuaggaLoaded(true)
+                        })
+                        .catch((error) => {
+                          setScanError("Failed to load scanner library. Please check your internet connection.")
+                        })
+                    }}
+                    className="text-sm"
+                  >
+                    Retry Loading Scanner
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  onClick={startBarcodeScanner} 
+                  className="w-full"
+                >
+                  <QrCode className="mr-2 h-4 w-4" />
+                  Start Camera Scanner
+                </Button>
               )}
             </div>
           ) : (
