@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
+'use client'
 import React, { useState, useEffect, useRef } from "react"
 import { Plus, Edit2, Trash2, Save, Search, ArrowUpDown, Loader, QrCode, X, Check, Hash, Camera } from "lucide-react"
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
