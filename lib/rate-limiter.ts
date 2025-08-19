@@ -20,7 +20,7 @@ try {
 }
 
 // Rate limit configuration
-const RATE_LIMIT_REQUESTS = 100000 // Number of requests allowed
+const RATE_LIMIT_REQUESTS = 10000000 // Number of requests allowed
 const RATE_LIMIT_WINDOW = 60 * 60 // Time window in seconds (1 hour)
 
 export async function rateLimiter(req: NextRequest, identifier?: string) {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
@@ -21,6 +22,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+
+// Import QuaggaJS for barcode scanning
+declare global {
+  interface Window {
+    Quagga: any;
+  }
+}
 
 interface InventoryItem {
   image: any
@@ -65,6 +73,28 @@ const generateSKU = (name: string) => {
   return `${prefix}-${timestamp}-${random}`;
 };
 
+// Load QuaggaJS library
+const loadQuaggaJS = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (window.Quagga) {
+      resolve();
+      return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js';
+    script.onload = () => {
+      if (window.Quagga) {
+        resolve();
+      } else {
+        reject(new Error('Failed to load Quagga'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load Quagga script'));
+    document.head.appendChild(script);
+  });
+};
+
 export default function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([])
@@ -91,10 +121,11 @@ export default function Inventory() {
   const [scanError, setScanError] = useState("")
   const [skuValidation, setSkuValidation] = useState({ isValid: true, message: "" })
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
+  const [scanSuccess, setScanSuccess] = useState(false)
+  const [quaggaLoaded, setQuaggaLoaded] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const scannerRef = useRef<HTMLDivElement>(null)
   const currency = 'KES'; 
   const router = useRouter()
 
@@ -105,6 +136,15 @@ export default function Inventory() {
       return
     }
     fetchInventory()
+    
+    // Load QuaggaJS
+    loadQuaggaJS()
+      .then(() => {
+        setQuaggaLoaded(true)
+      })
+      .catch((error) => {
+        console.error('Failed to load barcode scanner:', error)
+      })
   }, [router])
 
   useEffect(() => {
@@ -147,14 +187,17 @@ export default function Inventory() {
     setFilteredInventory(result)
   }, [inventory, searchQuery, sortField, sortDirection, filterStatus])
 
-  // Cleanup video stream when component unmounts or scanner closes
+  // Cleanup when component unmounts or scanner closes
   useEffect(() => {
     return () => {
+      if (window.Quagga && isScanning) {
+        window.Quagga.stop()
+      }
       if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop())
       }
     }
-  }, [videoStream])
+  }, [videoStream, isScanning])
 
   // SKU validation effect
   useEffect(() => {
@@ -209,56 +252,90 @@ export default function Inventory() {
     }
   }
 
-  const startCamera = async () => {
+  const startBarcodeScanner = async () => {
+    if (!quaggaLoaded || !scannerRef.current) {
+      setScanError("Barcode scanner library not loaded")
+      return
+    }
+
     try {
       setScanError("")
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Use back camera on mobile
-      })
-      setVideoStream(stream)
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
+      setScanSuccess(false)
       setIsScanning(true)
+
+      // Initialize Quagga
+      window.Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: scannerRef.current,
+          constraints: {
+            width: 480,
+            height: 320,
+            facingMode: "environment" // Use back camera on mobile
+          }
+        },
+        locator: {
+          patchSize: "medium",
+          halfSample: true
+        },
+        numOfWorkers: 2,
+        frequency: 10,
+        decoder: {
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "code_39_reader",
+            "code_39_vin_reader",
+            "codabar_reader",
+            "upc_reader",
+            "upc_e_reader",
+            "i2of5_reader"
+          ]
+        },
+        locate: true
+      }, (err: any) => {
+        if (err) {
+          console.error("QuaggaJS init error:", err)
+          setScanError("Failed to initialize camera. Please check permissions.")
+          setIsScanning(false)
+          return
+        }
+
+        // Start scanning
+        window.Quagga.start()
+
+        // Add detection handler
+        window.Quagga.onDetected((result: any) => {
+          const code = result.codeResult.code
+          if (code) {
+            handleScannedCode(code)
+          }
+        })
+      })
     } catch (error) {
-      setScanError("Unable to access camera. Please check permissions or enter SKU manually.")
-      console.error("Camera access error:", error)
+      console.error("Scanner error:", error)
+      setScanError("Unable to access camera. Please check permissions.")
+      setIsScanning(false)
     }
   }
 
-  const stopCamera = () => {
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop())
-      setVideoStream(null)
+  const stopBarcodeScanner = () => {
+    if (window.Quagga && isScanning) {
+      window.Quagga.stop()
+      window.Quagga.offDetected()
     }
     setIsScanning(false)
-  }
-
-  const captureFrame = () => {
-    if (!videoRef.current || !canvasRef.current) return
-
-    const canvas = canvasRef.current
-    const video = videoRef.current
-    const context = canvas.getContext('2d')
-
-    if (context) {
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      context.drawImage(video, 0, 0)
-      
-      // In a real implementation, you would use a barcode scanning library here
-      // For demonstration, we'll simulate scanning with manual input
-      const simulatedScan = prompt("Scanner simulation - Enter barcode/SKU:")
-      if (simulatedScan) {
-        setScannedCode(simulatedScan)
-        handleScannedCode(simulatedScan)
-      }
-    }
+    setScanSuccess(false)
   }
 
   const handleScannedCode = (code: string) => {
+    // Stop scanning immediately after successful scan
+    stopBarcodeScanner()
+    setScanSuccess(true)
+    setScannedCode(code)
+    
     // Check if this is a new item or existing item
     const existingItem = inventory.find(item => item.sku === code)
     
@@ -266,30 +343,38 @@ export default function Inventory() {
       // If item exists, ask if user wants to restock
       const shouldRestock = confirm(`Item "${existingItem.name}" (SKU: ${code}) already exists. Would you like to restock it?`)
       if (shouldRestock) {
+        closeScannerDialog()
         openRestockDialog(existingItem._id)
-      }
-    } else {
-      // If new item, populate the form
-      if (editingItem) {
-        setEditingItem({ ...editingItem, sku: code })
-      } else {
-        setNewItem({ ...newItem, sku: code })
+        return
       }
     }
     
-    stopCamera()
-    setScannerDialogOpen(false)
+    // If new item or user doesn't want to restock, populate the form
+    if (editingItem) {
+      setEditingItem({ ...editingItem, sku: code })
+    } else {
+      setNewItem({ ...newItem, sku: code })
+    }
+    
+    // Close scanner dialog after a brief delay to show success
+    setTimeout(() => {
+      closeScannerDialog()
+    }, 1500)
   }
 
   const openScannerDialog = () => {
     setScannerDialogOpen(true)
     setScannedCode("")
     setScanError("")
+    setScanSuccess(false)
   }
 
   const closeScannerDialog = () => {
-    stopCamera()
+    stopBarcodeScanner()
     setScannerDialogOpen(false)
+    setScannedCode("")
+    setScanError("")
+    setScanSuccess(false)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -500,8 +585,10 @@ export default function Inventory() {
                 onClick={openScannerDialog} 
                 variant="outline"
                 className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                disabled={!quaggaLoaded}
               >
-                <QrCode className="mr-2 h-4 w-4" /> Scan Barcode
+                <QrCode className="mr-2 h-4 w-4" /> 
+                {quaggaLoaded ? 'Scan Barcode' : 'Loading Scanner...'}
               </Button>
               <Button 
                 onClick={openAddDialog} 
@@ -710,6 +797,7 @@ export default function Inventory() {
                           onClick={openScannerDialog}
                           variant="outline"
                           className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                          disabled={!quaggaLoaded}
                         >
                           <QrCode className="h-4 w-4 mr-2" /> Scan Item
                         </Button>
@@ -881,6 +969,7 @@ export default function Inventory() {
                                   onClick={openScannerDialog}
                                   variant="outline"
                                   className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                  disabled={!quaggaLoaded}
                                 >
                                   <QrCode className="h-4 w-4 mr-2" /> Scan
                                 </Button>
@@ -960,6 +1049,7 @@ export default function Inventory() {
                     size="sm"
                     onClick={openScannerDialog}
                     className="px-3"
+                    disabled={!quaggaLoaded}
                   >
                     <QrCode className="h-4 w-4" />
                   </Button>
@@ -1085,9 +1175,9 @@ export default function Inventory() {
       </DialogContent>
     </Dialog>
 
-    {/* Scanner Dialog */}
+    {/* Enhanced Scanner Dialog */}
     <Dialog open={scannerDialogOpen} onOpenChange={closeScannerDialog}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5" />
@@ -1103,6 +1193,17 @@ export default function Inventory() {
               </AlertDescription>
             </Alert>
           )}
+
+          {scanSuccess && (
+            <Alert className="border-green-200 bg-green-50">
+              <AlertDescription className="text-green-700">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Successfully scanned: {scannedCode}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
           
           {!isScanning ? (
             <div className="text-center space-y-4">
@@ -1110,70 +1211,98 @@ export default function Inventory() {
                 <QrCode className="h-8 w-8 text-indigo-500" />
               </div>
               <p className="text-gray-600">
-                Use your camera to scan a barcode or QR code to automatically fill in the SKU field.
+                Use your camera to scan a barcode or QR code to automatically detect the SKU.
               </p>
-              <Button onClick={startCamera} className="w-full">
+              <Button 
+                onClick={startBarcodeScanner} 
+                className="w-full"
+                disabled={!quaggaLoaded}
+              >
                 <QrCode className="mr-2 h-4 w-4" />
-                Start Camera
+                {quaggaLoaded ? 'Start Camera' : 'Loading Scanner...'}
               </Button>
+              {!quaggaLoaded && (
+                <p className="text-sm text-gray-500">
+                  Loading barcode scanner library...
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="relative">
-                <video
-                  ref={videoRef}
-                  className="w-full h-64 bg-black rounded-lg"
-                  autoPlay
-                  playsInline
+                <div 
+                  ref={scannerRef}
+                  className="w-full h-64 bg-black rounded-lg overflow-hidden"
+                  style={{ maxHeight: '320px' }}
                 />
-                <canvas ref={canvasRef} className="hidden" />
                 
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-48 h-48 border-2 border-white border-dashed rounded-lg opacity-50"></div>
+                  <div className="w-48 h-32 border-2 border-white border-dashed rounded-lg opacity-70">
+                    <div className="w-full h-full relative">
+                      {/* Corner indicators */}
+                      <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-red-400"></div>
+                      <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-red-400"></div>
+                      <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-red-400"></div>
+                      <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-red-400"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-3 py-1 rounded-full text-sm">
+                  {scanSuccess ? 'Scan Complete!' : 'Position barcode in frame'}
                 </div>
               </div>
               
               <div className="flex gap-2">
-                <Button onClick={captureFrame} className="flex-1">
-                  <QrCode className="mr-2 h-4 w-4" />
-                  Scan Code
-                </Button>
-                <Button variant="outline" onClick={stopCamera}>
+                <Button 
+                  variant="outline" 
+                  onClick={stopBarcodeScanner}
+                  className="flex-1"
+                >
                   <X className="mr-2 h-4 w-4" />
-                  Stop
+                  Stop Scanner
                 </Button>
               </div>
               
-              <p className="text-sm text-gray-500 text-center">
-                Position the barcode within the frame and click &quot;Scan Code
-              </p>
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">
+                  Supported formats: Code 128, EAN, UPC, Code 39, and more
+                </p>
+                <div className="flex justify-center space-x-2">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-indigo-300 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              </div>
             </div>
           )}
           
-          <div className="border-t pt-4">
-            <Label htmlFor="manualSku">Or enter SKU manually:</Label>
-            <div className="flex gap-2 mt-2">
-              <Input
-                id="manualSku"
-                value={scannedCode}
-                onChange={(e) => setScannedCode(e.target.value.toUpperCase())}
-                placeholder="Enter SKU manually"
-                className="flex-1"
-              />
-              <Button 
-                onClick={() => scannedCode && handleScannedCode(scannedCode)}
-                disabled={!scannedCode}
-                size="sm"
-              >
-                <Check className="h-4 w-4" />
-              </Button>
+          {!scanSuccess && (
+            <div className="border-t pt-4">
+              <Label htmlFor="manualSku">Or enter SKU manually:</Label>
+              <div className="flex gap-2 mt-2">
+                <Input
+                  id="manualSku"
+                  value={scannedCode}
+                  onChange={(e) => setScannedCode(e.target.value.toUpperCase())}
+                  placeholder="Enter SKU manually"
+                  className="flex-1"
+                />
+                <Button 
+                  onClick={() => scannedCode && handleScannedCode(scannedCode)}
+                  disabled={!scannedCode}
+                  size="sm"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         <DialogFooter>
           <Button variant="outline" onClick={closeScannerDialog}>
-            Cancel
+            {scanSuccess ? 'Done' : 'Cancel'}
           </Button>
         </DialogFooter>
       </DialogContent>
