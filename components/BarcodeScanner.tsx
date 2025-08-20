@@ -12,8 +12,30 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 // Import ZXing-js components
 declare global {
   interface Window {
-    ZXing: any;
+    ZXing: {
+      BrowserMultiFormatReader: new () => {
+        decodeFromVideoDevice: (
+          deviceId: string | undefined, 
+          videoElement: HTMLVideoElement, 
+          callback: (result: ZXingResult | null, error: ZXingError | null) => void
+        ) => void;
+        decodeFromCanvas: (canvas: HTMLCanvasElement) => Promise<ZXingResult>;
+        reset: () => void;
+      };
+      NotFoundException: new () => ZXingError;
+    };
   }
+}
+
+// ZXing type definitions
+interface ZXingResult {
+  getText(): string;
+  getBarcodeFormat(): string;
+}
+
+interface ZXingError {
+  name: string;
+  message: string;
 }
 
 interface BarcodeScannerProps {
@@ -55,17 +77,26 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
       try {
         const script = document.createElement('script')
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/zxing-library/0.20.0/umd/index.min.js'
+        script.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js'
         script.onload = () => {
-          setIsZXingLoaded(true)
+          // Give a small delay to ensure the library is fully loaded
+          setTimeout(() => {
+            if (window.ZXing) {
+              setIsZXingLoaded(true)
+            } else {
+              setScanError("Barcode scanning library failed to initialize.")
+            }
+          }, 100)
         }
         script.onerror = () => {
-          setScanError("Failed to load barcode scanning library.")
+          setScanError("Failed to load barcode scanning library. Please check your internet connection.")
         }
         document.head.appendChild(script)
 
         return () => {
-          document.head.removeChild(script)
+          if (document.head.contains(script)) {
+            document.head.removeChild(script)
+          }
         }
       } catch (error) {
         console.error('Error loading ZXing:', error)
@@ -202,101 +233,109 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
 
     try {
-      // Initialize ZXing code reader with multiple formats
+      // Initialize ZXing BrowserMultiFormatReader
       const codeReader = new window.ZXing.BrowserMultiFormatReader()
       codeReaderRef.current = codeReader
 
-      // Set up canvas for image capture
-      const canvas = canvasRef.current
-      const video = videoRef.current
-      const ctx = canvas.getContext('2d')
-
-      if (!ctx) return
-
-      // Start continuous scanning
-      const scanLoop = () => {
-        if (!isScanning || !video || video.readyState !== video.HAVE_ENOUGH_DATA) {
-          animationFrameRef.current = requestAnimationFrame(scanLoop)
-          return
-        }
-
-        try {
-          // Set canvas size to video size
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-
-          // Draw current video frame to canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-          // Try to decode barcode from canvas
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-          
-          // Create luminance source from image data
-          const source = new window.ZXing.RGBLuminanceSource(
-            new Uint8ClampedArray(imageData.data), 
-            imageData.width, 
-            imageData.height
-          )
-          const bitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(source))
-
-          try {
-            // Try to decode with multiple readers
-            const readers = [
-              new window.ZXing.MultiFormatReader(),
-              new window.ZXing.Code128Reader(),
-              new window.ZXing.Code39Reader(),
-              new window.ZXing.EAN13Reader(),
-              new window.ZXing.EAN8Reader(),
-              new window.ZXing.UPCAReader(),
-              new window.ZXing.UPCEReader(),
-              new window.ZXing.QRCodeReader()
-            ]
-
-            let result = null
-            for (const reader of readers) {
-              try {
-                result = reader.decode(bitmap)
-                if (result) break
-              } catch (e) {
-                // Continue to next reader
-              }
-            }
-
-            if (result) {
-              const code = result.getText()
-              if (code && code.length > 0) {
-                handleScannedCode(code)
-                return
-              }
-            }
-
-          } catch (decodeError) {
-            // No barcode found in this frame, continue scanning
-          }
-
-          // Update scan attempts counter
-          setScanAttempts(prev => prev + 1)
-
-          // Continue scanning
-          if (isScanning) {
-            animationFrameRef.current = requestAnimationFrame(scanLoop)
-          }
-
-        } catch (error) {
-          console.error('Error during barcode detection:', error)
-          if (isScanning) {
-            animationFrameRef.current = requestAnimationFrame(scanLoop)
+      // Use ZXing's built-in continuous decode method
+      codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result: ZXingResult | null, error: ZXingError | null) => {
+        if (result) {
+          const code = result.getText()
+          if (code && code.length > 0) {
+            handleScannedCode(code)
+            return
           }
         }
-      }
+        
+        if (error && !(error instanceof window.ZXing.NotFoundException)) {
+          console.error('Barcode scanning error:', error)
+        }
 
-      // Start the scanning loop
-      scanLoop()
+        // Update scan attempts counter (throttled)
+        setScanAttempts(prev => prev + 1)
+      })
 
     } catch (error) {
       console.error('Error initializing barcode scanner:', error)
       setScanError("Failed to initialize barcode scanner.")
+      
+      // Fallback to manual canvas-based scanning
+      startManualBarcodeDetection()
     }
+  }
+
+  // Fallback manual detection method
+  const startManualBarcodeDetection = () => {
+    const canvas = canvasRef.current
+    const video = videoRef.current
+    const ctx = canvas?.getContext('2d')
+
+    if (!ctx || !video || !canvas) return
+
+    const scanLoop = () => {
+      if (!isScanning || !video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        animationFrameRef.current = requestAnimationFrame(scanLoop)
+        return
+      }
+
+      try {
+        // Set canvas size to video size
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+
+        // Draw current video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        // Try to decode using ZXing
+        try {
+          const codeReader = new window.ZXing.BrowserMultiFormatReader()
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          
+          // Convert ImageData to HTMLCanvasElement for ZXing
+          const tempCanvas = document.createElement('canvas')
+          tempCanvas.width = imageData.width
+          tempCanvas.height = imageData.height
+          const tempCtx = tempCanvas.getContext('2d')
+          if (tempCtx) {
+            tempCtx.putImageData(imageData, 0, 0)
+            
+            codeReader.decodeFromCanvas(tempCanvas)
+              .then((result: ZXingResult) => {
+                if (result) {
+                  const code = result.getText()
+                  if (code && code.length > 0) {
+                    handleScannedCode(code)
+                    return
+                  }
+                }
+              })
+              .catch((error: ZXingError) => {
+                // No barcode found in this frame
+              })
+          }
+        } catch (decodeError) {
+          // No barcode found in this frame, continue scanning
+        }
+
+        // Update scan attempts counter
+        setScanAttempts(prev => prev + 1)
+
+        // Continue scanning
+        if (isScanning) {
+          setTimeout(() => {
+            animationFrameRef.current = requestAnimationFrame(scanLoop)
+          }, 100) // Throttle to reduce CPU usage
+        }
+
+      } catch (error) {
+        console.error('Error during barcode detection:', error)
+        if (isScanning) {
+          animationFrameRef.current = requestAnimationFrame(scanLoop)
+        }
+      }
+    }
+
+    scanLoop()
   }
 
   const handleScannedCode = (code: string) => {
