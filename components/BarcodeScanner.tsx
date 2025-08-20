@@ -9,6 +9,13 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
+// Import ZXing-js components
+declare global {
+  interface Window {
+    ZXing: any;
+  }
+}
+
 interface BarcodeScannerProps {
   isOpen: boolean
   onClose: () => void
@@ -29,26 +36,77 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [hasCamera, setHasCamera] = useState<boolean | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [lastScanTime, setLastScanTime] = useState(0)
+  const [isZXingLoaded, setIsZXingLoaded] = useState(false)
+  const [scanAttempts, setScanAttempts] = useState(0)
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number>()
+  const codeReaderRef = useRef<any>(null)
+  const scanIntervalRef = useRef<NodeJS.Timeout>()
+
+  // Load ZXing-js library
+  useEffect(() => {
+    const loadZXing = async () => {
+      if (window.ZXing) {
+        setIsZXingLoaded(true)
+        return
+      }
+
+      try {
+        const script = document.createElement('script')
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/zxing-library/0.20.0/umd/index.min.js'
+        script.onload = () => {
+          setIsZXingLoaded(true)
+        }
+        script.onerror = () => {
+          setScanError("Failed to load barcode scanning library.")
+        }
+        document.head.appendChild(script)
+
+        return () => {
+          document.head.removeChild(script)
+        }
+      } catch (error) {
+        console.error('Error loading ZXing:', error)
+        setScanError("Failed to load barcode scanning library.")
+      }
+    }
+
+    if (isOpen) {
+      loadZXing()
+    }
+  }, [isOpen])
 
   // Check camera availability
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && isZXingLoaded) {
       checkCameraAvailability()
     }
-  }, [isOpen])
+  }, [isOpen, isZXingLoaded])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopCamera()
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
+      cleanup()
+    }
+  }, [])
+
+  const cleanup = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+    }
+    if (codeReaderRef.current) {
+      try {
+        codeReaderRef.current.reset()
+      } catch (error) {
+        console.log('Error resetting code reader:', error)
       }
     }
+    stopCamera()
   }, [])
 
   const checkCameraAvailability = async () => {
@@ -74,20 +132,21 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }
 
   const startCamera = async () => {
-    if (!hasCamera) {
-      setScanError("No camera available.")
+    if (!hasCamera || !isZXingLoaded) {
+      setScanError("Camera or barcode library not available.")
       return
     }
 
     try {
       setScanError("")
       setIsScanning(true)
+      setScanAttempts(0)
 
       const constraints = {
         video: {
           facingMode: 'environment', // Prefer back camera
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 }
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
         }
       }
 
@@ -96,8 +155,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
-        videoRef.current.play()
+        await videoRef.current.play()
         
+        // Wait for video to be ready
         videoRef.current.onloadedmetadata = () => {
           startBarcodeDetection()
         }
@@ -120,44 +180,123 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
     }
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+    }
+    if (codeReaderRef.current) {
+      try {
+        codeReaderRef.current.reset()
+      } catch (error) {
+        console.log('Error resetting code reader:', error)
+      }
+    }
     setIsScanning(false)
     setScanSuccess(false)
+    setScanAttempts(0)
   }, [stream])
 
-  // Simple barcode detection using canvas and basic pattern recognition
   const startBarcodeDetection = () => {
-    const detectBarcode = () => {
-      if (!videoRef.current || !canvasRef.current || !isScanning) {
-        return
-      }
-
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
-
-      if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
-        animationFrameRef.current = requestAnimationFrame(detectBarcode)
-        return
-      }
-
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      ctx.drawImage(video, 0, 0)
-
-      // For now, we'll use a simplified approach
-      // In a real implementation, you'd use a proper barcode detection library
-      // or implement ZXing-js which is more reliable than QuaggaJS
-      
-      // Simulate barcode detection for demo purposes
-      // You can replace this with actual barcode detection logic
-      setTimeout(() => {
-        if (isScanning) {
-          animationFrameRef.current = requestAnimationFrame(detectBarcode)
-        }
-      }, 100)
+    if (!window.ZXing || !videoRef.current || !canvasRef.current) {
+      console.error('ZXing library or video elements not ready')
+      return
     }
 
-    detectBarcode()
+    try {
+      // Initialize ZXing code reader with multiple formats
+      const codeReader = new window.ZXing.BrowserMultiFormatReader()
+      codeReaderRef.current = codeReader
+
+      // Set up canvas for image capture
+      const canvas = canvasRef.current
+      const video = videoRef.current
+      const ctx = canvas.getContext('2d')
+
+      if (!ctx) return
+
+      // Start continuous scanning
+      const scanLoop = () => {
+        if (!isScanning || !video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+          animationFrameRef.current = requestAnimationFrame(scanLoop)
+          return
+        }
+
+        try {
+          // Set canvas size to video size
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+
+          // Draw current video frame to canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+          // Try to decode barcode from canvas
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          
+          // Create luminance source from image data
+          const source = new window.ZXing.RGBLuminanceSource(
+            new Uint8ClampedArray(imageData.data), 
+            imageData.width, 
+            imageData.height
+          )
+          const bitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(source))
+
+          try {
+            // Try to decode with multiple readers
+            const readers = [
+              new window.ZXing.MultiFormatReader(),
+              new window.ZXing.Code128Reader(),
+              new window.ZXing.Code39Reader(),
+              new window.ZXing.EAN13Reader(),
+              new window.ZXing.EAN8Reader(),
+              new window.ZXing.UPCAReader(),
+              new window.ZXing.UPCEReader(),
+              new window.ZXing.QRCodeReader()
+            ]
+
+            let result = null
+            for (const reader of readers) {
+              try {
+                result = reader.decode(bitmap)
+                if (result) break
+              } catch (e) {
+                // Continue to next reader
+              }
+            }
+
+            if (result) {
+              const code = result.getText()
+              if (code && code.length > 0) {
+                handleScannedCode(code)
+                return
+              }
+            }
+
+          } catch (decodeError) {
+            // No barcode found in this frame, continue scanning
+          }
+
+          // Update scan attempts counter
+          setScanAttempts(prev => prev + 1)
+
+          // Continue scanning
+          if (isScanning) {
+            animationFrameRef.current = requestAnimationFrame(scanLoop)
+          }
+
+        } catch (error) {
+          console.error('Error during barcode detection:', error)
+          if (isScanning) {
+            animationFrameRef.current = requestAnimationFrame(scanLoop)
+          }
+        }
+      }
+
+      // Start the scanning loop
+      scanLoop()
+
+    } catch (error) {
+      console.error('Error initializing barcode scanner:', error)
+      setScanError("Failed to initialize barcode scanner.")
+    }
   }
 
   const handleScannedCode = (code: string) => {
@@ -169,13 +308,19 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     setScanSuccess(true)
     setScannedCode(code)
     
-    const existingItem = existingItems.find(item => item.sku === code)
+    const existingItem = existingItems.find(item => 
+      item.sku.toLowerCase() === code.toLowerCase()
+    )
     
     if (existingItem) {
-      const shouldRestock = confirm(`Item "${existingItem.name}" (SKU: ${code}) already exists. Would you like to restock it?`)
+      const shouldRestock = window.confirm(
+        `Item "${existingItem.name}" (SKU: ${code}) already exists. Would you like to restock it?`
+      )
       if (shouldRestock) {
-        handleClose()
-        onScanResult(code)
+        setTimeout(() => {
+          handleClose()
+          onScanResult(code)
+        }, 1000)
         return
       } else {
         // Reset scanner state if user doesn't want to restock
@@ -192,7 +337,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }
 
   const handleClose = () => {
-    stopCamera()
+    cleanup()
     setScannedCode("")
     setScanError("")
     setScanSuccess(false)
@@ -205,7 +350,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
   }
 
-  // Simulate successful scan (for testing purposes)
+  // Simulate successful scan (for testing purposes - remove in production)
   const simulateScan = () => {
     const testSku = `TEST${Math.floor(Math.random() * 10000)}`
     handleScannedCode(testSku)
@@ -242,14 +387,16 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             </Alert>
           )}
           
-          {hasCamera === null && (
+          {(hasCamera === null || !isZXingLoaded) && (
             <div className="text-center space-y-3">
               <Loader className="h-6 w-6 animate-spin text-indigo-500 mx-auto" />
-              <p className="text-sm text-gray-500">Checking camera availability...</p>
+              <p className="text-sm text-gray-500">
+                {!isZXingLoaded ? 'Loading barcode scanner...' : 'Checking camera availability...'}
+              </p>
             </div>
           )}
 
-          {hasCamera === false && (
+          {hasCamera === false && isZXingLoaded && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto">
                 <AlertCircle className="h-8 w-8 text-red-500" />
@@ -260,7 +407,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             </div>
           )}
           
-          {hasCamera && !isScanning && (
+          {hasCamera && isZXingLoaded && !isScanning && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mx-auto">
                 <Camera className="h-8 w-8 text-indigo-500" />
@@ -275,7 +422,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   Start Camera Scanner
                 </Button>
                 
-                {/* Test button for development */}
+                {/* Test button for development - remove in production */}
                 <Button 
                   variant="outline" 
                   onClick={simulateScan}
@@ -303,6 +450,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   className="hidden"
                 />
                 
+                {/* Scanning overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-48 h-32 border-2 border-white border-dashed rounded-lg opacity-70">
                     <div className="w-full h-full relative">
@@ -314,8 +462,21 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   </div>
                 </div>
 
+                {/* Status indicator */}
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-3 py-1 rounded-full text-sm">
-                  {scanSuccess ? 'Scan Complete!' : 'Position barcode in frame'}
+                  {scanSuccess ? 'Scan Complete!' : `Scanning... (${scanAttempts} attempts)`}
+                </div>
+
+                {/* Scanning line animation */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-32 overflow-hidden">
+                    <div className="w-full h-0.5 bg-red-500 animate-pulse" 
+                         style={{
+                           animation: 'scanLine 2s linear infinite',
+                           transform: 'translateY(0)'
+                         }}>
+                    </div>
+                  </div>
                 </div>
               </div>
               
@@ -341,6 +502,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               <div className="text-center">
                 <p className="text-sm text-gray-600 mb-2">
                   Point camera at barcode or QR code
+                </p>
+                <p className="text-xs text-gray-500 mb-2">
+                  Supports: UPC, EAN, Code 128, Code 39, QR codes
                 </p>
                 <div className="flex justify-center space-x-2">
                   <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
@@ -384,6 +548,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             {scanSuccess ? 'Done' : 'Cancel'}
           </Button>
         </DialogFooter>
+
+        {/* Add CSS for scan line animation */}
+        <style jsx>{`
+          @keyframes scanLine {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(128px); }
+          }
+        `}</style>
       </DialogContent>
     </Dialog>
   )
