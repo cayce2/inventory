@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Plus, Edit2, Trash2, Save, ShoppingBag, Search, ArrowUpDown, Loader, QrCode, X, Check, Hash } from "lucide-react"
+import { Plus, Edit2, Trash2, Save, ShoppingBag, Search, ArrowUpDown, Loader, QrCode, Hash } from "lucide-react"
 import NavbarLayout from "@/components/NavbarLayout"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -22,13 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-
-// Import QuaggaJS for barcode scanning
-declare global {
-  interface Window {
-    Quagga: any;
-  }
-}
+import BarcodeScanner from "@/components/BarcodeScanner"
 
 interface InventoryItem {
   image: any
@@ -73,65 +67,6 @@ const generateSKU = (name: string) => {
   return `${prefix}-${timestamp}-${random}`;
 };
 
-// Load QuaggaJS library from multiple CDN sources
-const loadQuaggaJS = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (window.Quagga) {
-      resolve();
-      return;
-    }
-    
-    // Try multiple CDN sources
-    const cdnSources = [
-      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js',
-      'https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js',
-      'https://unpkg.com/quagga@0.12.1/dist/quagga.min.js'
-    ];
-    
-    let currentIndex = 0;
-    
-    const tryLoadScript = () => {
-      if (currentIndex >= cdnSources.length) {
-        reject(new Error('All CDN sources failed to load QuaggaJS'));
-        return;
-      }
-      
-      const script = document.createElement('script');
-      script.src = cdnSources[currentIndex];
-      script.async = true;
-      
-      script.onload = () => {
-        // Wait a moment for the library to initialize
-        setTimeout(() => {
-          if (window.Quagga) {
-            console.log(`QuaggaJS loaded successfully from: ${cdnSources[currentIndex]}`);
-            resolve();
-          } else {
-            currentIndex++;
-            tryLoadScript();
-          }
-        }, 100);
-      };
-      
-      script.onerror = () => {
-        console.warn(`Failed to load QuaggaJS from: ${cdnSources[currentIndex]}`);
-        currentIndex++;
-        tryLoadScript();
-      };
-      
-      // Remove any existing script tags first
-      const existingScript = document.querySelector('script[src*="quagga"]');
-      if (existingScript) {
-        existingScript.remove();
-      }
-      
-      document.head.appendChild(script);
-    };
-    
-    tryLoadScript();
-  });
-};
-
 export default function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([])
@@ -151,18 +86,9 @@ export default function Inventory() {
   const [restockQuantity, setRestockQuantity] = useState<number>(10)
   const [restockDialogOpen, setRestockDialogOpen] = useState(false)
   const [itemToRestock, setItemToRestock] = useState<string | null>(null)
-  
-  // Scanner-related state
-  const [isScanning, setIsScanning] = useState(false)
-  const [scannedCode, setScannedCode] = useState("")
-  const [scanError, setScanError] = useState("")
   const [skuValidation, setSkuValidation] = useState({ isValid: true, message: "" })
-  const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
-  const [scanSuccess, setScanSuccess] = useState(false)
-  const [quaggaLoaded, setQuaggaLoaded] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const scannerRef = useRef<HTMLDivElement>(null)
   const currency = 'KES'; 
   const router = useRouter()
 
@@ -173,29 +99,6 @@ export default function Inventory() {
       return
     }
     fetchInventory()
-    
-    // Load QuaggaJS with better error handling
-    console.log('Loading barcode scanner library...');
-    loadQuaggaJS()
-      .then(() => {
-        console.log('QuaggaJS loaded successfully');
-        setQuaggaLoaded(true)
-      })
-      .catch((error) => {
-        console.error('Failed to load barcode scanner:', error)
-        // Set a timeout to try again after 5 seconds
-        setTimeout(() => {
-          console.log('Retrying to load QuaggaJS...');
-          loadQuaggaJS()
-            .then(() => {
-              console.log('QuaggaJS loaded successfully on retry');
-              setQuaggaLoaded(true)
-            })
-            .catch((retryError) => {
-              console.error('Failed to load barcode scanner after retry:', retryError)
-            })
-        }, 5000);
-      })
   }, [router])
 
   useEffect(() => {
@@ -237,18 +140,6 @@ export default function Inventory() {
     
     setFilteredInventory(result)
   }, [inventory, searchQuery, sortField, sortDirection, filterStatus])
-
-  // Cleanup when component unmounts or scanner closes
-  useEffect(() => {
-    return () => {
-      if (window.Quagga && isScanning) {
-        window.Quagga.stop()
-      }
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop())
-      }
-    }
-  }, [videoStream, isScanning])
 
   // SKU validation effect
   useEffect(() => {
@@ -303,172 +194,22 @@ export default function Inventory() {
     }
   }
 
-  const startBarcodeScanner = async () => {
-    if (!quaggaLoaded || !scannerRef.current) {
-      setScanError("Barcode scanner library not loaded. Please wait or try again.")
-      return
-    }
-
-    try {
-      setScanError("")
-      setScanSuccess(false)
-      setIsScanning(true)
-
-      // Check if Quagga is actually available
-      if (!window.Quagga) {
-        setScanError("Scanner library not available. Please refresh the page.")
-        setIsScanning(false)
-        return
-      }
-
-      // Initialize Quagga with more robust configuration
-      window.Quagga.init({
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: scannerRef.current,
-          constraints: {
-            width: { min: 320, ideal: 480, max: 640 },
-            height: { min: 240, ideal: 320, max: 480 },
-            facingMode: "environment",
-            aspectRatio: { min: 1, max: 2 }
-          }
-        },
-        locator: {
-          patchSize: "medium",
-          halfSample: true
-        },
-        numOfWorkers: navigator.hardwareConcurrency || 2,
-        frequency: 10,
-        debug: {
-          showCanvas: false,
-          showPatches: false,
-          showFoundPatches: false,
-          showSkeleton: false,
-          showLabels: false,
-          showPatchLabels: false,
-          showRemainingPatchLabels: false,
-          boxFromPatches: {
-            showTransformed: false,
-            showTransformedBox: false,
-            showBB: false
-          }
-        },
-        decoder: {
-          readers: [
-            "code_128_reader",
-            "ean_reader",
-            "ean_8_reader",
-            "code_39_reader",
-            "code_39_vin_reader",
-            "codabar_reader",
-            "upc_reader",
-            "upc_e_reader",
-            "i2of5_reader",
-            "2of5_reader"
-          ]
-        },
-        locate: true
-      }, (err: any) => {
-        if (err) {
-          console.error("QuaggaJS init error:", err)
-          setScanError(`Failed to initialize camera: ${err.message || 'Unknown error'}. Please check camera permissions.`)
-          setIsScanning(false)
-          return
-        }
-
-        console.log("QuaggaJS initialized successfully");
-        
-        // Start scanning
-        try {
-          window.Quagga.start()
-          console.log("QuaggaJS started successfully");
-        } catch (startError) {
-          console.error("QuaggaJS start error:", startError)
-          setScanError("Failed to start camera. Please check permissions.")
-          setIsScanning(false)
-          return
-        }
-
-        // Add detection handler
-        window.Quagga.onDetected((result: any) => {
-          if (result && result.codeResult && result.codeResult.code) {
-            const code = result.codeResult.code
-            console.log("Barcode detected:", code)
-            
-            // Add confidence check
-            if (result.codeResult.confidence && result.codeResult.confidence > 80) {
-              handleScannedCode(code)
-            }
-          }
-        })
-      })
-    } catch (error) {
-      console.error("Scanner initialization error:", error)
-      setScanError(`Scanner error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      setIsScanning(false)
-    }
-  }
-
-  const stopBarcodeScanner = () => {
-    try {
-      if (window.Quagga && isScanning) {
-        window.Quagga.stop()
-        window.Quagga.offDetected()
-        console.log("QuaggaJS stopped successfully")
-      }
-    } catch (error) {
-      console.error("Error stopping scanner:", error)
-    }
-    setIsScanning(false)
-    setScanSuccess(false)
-  }
-
-  const handleScannedCode = (code: string) => {
-    // Stop scanning immediately after successful scan
-    stopBarcodeScanner()
-    setScanSuccess(true)
-    setScannedCode(code)
-    
+  const handleScanResult = (code: string) => {
     // Check if this is a new item or existing item
     const existingItem = inventory.find(item => item.sku === code)
     
     if (existingItem) {
-      // If item exists, ask if user wants to restock
-      const shouldRestock = confirm(`Item "${existingItem.name}" (SKU: ${code}) already exists. Would you like to restock it?`)
-      if (shouldRestock) {
-        closeScannerDialog()
-        openRestockDialog(existingItem._id)
-        return
-      }
+      // If item exists, open restock dialog
+      openRestockDialog(existingItem._id)
+      return
     }
     
-    // If new item or user doesn't want to restock, populate the form
+    // If new item, populate the form
     if (editingItem) {
       setEditingItem({ ...editingItem, sku: code })
     } else {
       setNewItem({ ...newItem, sku: code })
     }
-    
-    // Close scanner dialog after a brief delay to show success
-    setTimeout(() => {
-      closeScannerDialog()
-    }, 1500)
-  }
-
-  const openScannerDialog = () => {
-    setScannerDialogOpen(true)
-    setScannedCode("")
-    setScanError("")
-    setScanSuccess(false)
-  }
-
-  const closeScannerDialog = () => {
-    stopBarcodeScanner()
-    setScannerDialogOpen(false)
-    setScannedCode("")
-    setScanError("")
-    setScanSuccess(false)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -676,13 +417,12 @@ export default function Inventory() {
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={openScannerDialog} 
+                onClick={() => setScannerDialogOpen(true)} 
                 variant="outline"
                 className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                disabled={!quaggaLoaded}
               >
                 <QrCode className="mr-2 h-4 w-4" /> 
-                {quaggaLoaded ? 'Scan Barcode' : 'Loading Scanner...'}
+                Scan Barcode
               </Button>
               <Button 
                 onClick={openAddDialog} 
@@ -784,7 +524,7 @@ export default function Inventory() {
                     const stockPercentage = item.lowStockThreshold > 0 
                       ? Math.min(Math.round((item.quantity / item.lowStockThreshold) * 100), 100)
                       : 100;
-                    
+
                     return (
                       <Card key={item._id} className="overflow-hidden border border-gray-200 transition-all hover:shadow-md group">
                         <div className="relative h-48 overflow-hidden bg-white flex items-center justify-center">
@@ -888,10 +628,9 @@ export default function Inventory() {
                     ) : (
                       <div className="flex gap-2">
                         <Button 
-                          onClick={openScannerDialog}
+                          onClick={() => setScannerDialogOpen(true)}
                           variant="outline"
                           className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                          disabled={!quaggaLoaded}
                         >
                           <QrCode className="h-4 w-4 mr-2" /> Scan Item
                         </Button>
@@ -1060,10 +799,9 @@ export default function Inventory() {
                               <div className="flex gap-2 justify-center">
                                 <Button 
                                   size="sm"
-                                  onClick={openScannerDialog}
+                                  onClick={() => setScannerDialogOpen(true)}
                                   variant="outline"
                                   className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                                  disabled={!quaggaLoaded}
                                 >
                                   <QrCode className="h-4 w-4 mr-2" /> Scan
                                 </Button>
@@ -1087,6 +825,14 @@ export default function Inventory() {
           </Tabs>
         </div>
       </div>
+
+      {/* Barcode Scanner Component */}
+      <BarcodeScanner
+        isOpen={scannerDialogOpen}
+        onClose={() => setScannerDialogOpen(false)}
+        onScanResult={handleScanResult}
+        existingItems={inventory}
+      />
 
       {/* Item Add/Edit Dialog */}
       <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
@@ -1141,9 +887,8 @@ export default function Inventory() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={openScannerDialog}
+                    onClick={() => setScannerDialogOpen(true)}
                     className="px-3"
-                    disabled={!quaggaLoaded}
                   >
                     <QrCode className="h-4 w-4" />
                   </Button>
@@ -1266,161 +1011,6 @@ export default function Inventory() {
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
-
-    {/* Enhanced Scanner Dialog */}
-    <Dialog open={scannerDialogOpen} onOpenChange={closeScannerDialog}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <QrCode className="h-5 w-5" />
-            Barcode Scanner
-          </DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {scanError && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">
-                {scanError}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {scanSuccess && (
-            <Alert className="border-green-200 bg-green-50">
-              <AlertDescription className="text-green-700">
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4" />
-                  Successfully scanned: {scannedCode}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {!isScanning ? (
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mx-auto">
-                <QrCode className="h-8 w-8 text-indigo-500" />
-              </div>
-              <p className="text-gray-600">
-                Use your camera to scan a barcode or QR code to automatically detect the SKU.
-              </p>
-              
-              {!quaggaLoaded ? (
-                <div className="space-y-3">
-                  <div className="flex justify-center">
-                    <Loader className="h-6 w-6 animate-spin text-indigo-500" />
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Loading barcode scanner library... This may take a moment.
-                  </p>
-                  <Button 
-                    variant="outline"
-                    onClick={() => {
-                      // Manual retry
-                      loadQuaggaJS()
-                        .then(() => {
-                          setQuaggaLoaded(true)
-                        })
-                        .catch((error) => {
-                          setScanError("Failed to load scanner library. Please check your internet connection.")
-                        })
-                    }}
-                    className="text-sm"
-                  >
-                    Retry Loading Scanner
-                  </Button>
-                </div>
-              ) : (
-                <Button 
-                  onClick={startBarcodeScanner} 
-                  className="w-full"
-                >
-                  <QrCode className="mr-2 h-4 w-4" />
-                  Start Camera Scanner
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="relative">
-                <div 
-                  ref={scannerRef}
-                  className="w-full h-64 bg-black rounded-lg overflow-hidden"
-                  style={{ maxHeight: '320px' }}
-                />
-                
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-48 h-32 border-2 border-white border-dashed rounded-lg opacity-70">
-                    <div className="w-full h-full relative">
-                      {/* Corner indicators */}
-                      <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-red-400"></div>
-                      <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-red-400"></div>
-                      <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-red-400"></div>
-                      <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-red-400"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-3 py-1 rounded-full text-sm">
-                  {scanSuccess ? 'Scan Complete!' : 'Position barcode in frame'}
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={stopBarcodeScanner}
-                  className="flex-1"
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Stop Scanner
-                </Button>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-sm text-gray-600 mb-2">
-                  Supported formats: Code 128, EAN, UPC, Code 39, and more
-                </p>
-                <div className="flex justify-center space-x-2">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                  <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 bg-indigo-300 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {!scanSuccess && (
-            <div className="border-t pt-4">
-              <Label htmlFor="manualSku">Or enter SKU manually:</Label>
-              <div className="flex gap-2 mt-2">
-                <Input
-                  id="manualSku"
-                  value={scannedCode}
-                  onChange={(e) => setScannedCode(e.target.value.toUpperCase())}
-                  placeholder="Enter SKU manually"
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={() => scannedCode && handleScannedCode(scannedCode)}
-                  disabled={!scannedCode}
-                  size="sm"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <DialogFooter>
-          <Button variant="outline" onClick={closeScannerDialog}>
-            {scanSuccess ? 'Done' : 'Cancel'}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
 
