@@ -88,6 +88,10 @@ export default function Inventory() {
   const [itemToRestock, setItemToRestock] = useState<string | null>(null)
   const [skuValidation, setSkuValidation] = useState({ isValid: true, message: "" })
   
+  // New state for barcode integration
+  const [scannerMode, setScannerMode] = useState<'standalone' | 'input'>('standalone')
+  const [isScanningForSku, setIsScanningForSku] = useState(false)
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
   const currency = 'KES'; 
   const router = useRouter()
@@ -195,7 +199,23 @@ export default function Inventory() {
   }
 
   const handleScanResult = (code: string) => {
-    // Check if this is a new item or existing item
+    console.log('Scan result received:', code, 'Scanner mode:', scannerMode)
+    
+    if (scannerMode === 'input') {
+      // When scanning for SKU input, update the current form
+      if (editingItem) {
+        setEditingItem({ ...editingItem, sku: code })
+      } else {
+        setNewItem({ ...newItem, sku: code })
+      }
+      // Close scanner and reset mode
+      setScannerDialogOpen(false)
+      setScannerMode('standalone')
+      setIsScanningForSku(false)
+      return
+    }
+    
+    // Standalone mode - check if this is a new item or existing item
     const existingItem = inventory.find(item => item.sku === code)
     
     if (existingItem) {
@@ -204,12 +224,16 @@ export default function Inventory() {
       return
     }
     
-    // If new item, populate the form
-    if (editingItem) {
-      setEditingItem({ ...editingItem, sku: code })
-    } else {
-      setNewItem({ ...newItem, sku: code })
+    // If new item, open add dialog with SKU pre-filled
+    setNewItem({ ...defaultNewItem, sku: code })
+    setEditingItem(null)
+    setSelectedImage(null)
+    setPreviewImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
     }
+    setScannerDialogOpen(false)
+    setItemDialogOpen(true)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -406,6 +430,20 @@ export default function Inventory() {
     }
   }
 
+  // New function to open scanner for SKU input
+  const openScannerForSku = () => {
+    setScannerMode('input')
+    setIsScanningForSku(true)
+    setScannerDialogOpen(true)
+  }
+
+  // New function to open scanner in standalone mode
+  const openStandaloneScanner = () => {
+    setScannerMode('standalone')
+    setIsScanningForSku(false)
+    setScannerDialogOpen(true)
+  }
+
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -417,7 +455,7 @@ export default function Inventory() {
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={() => setScannerDialogOpen(true)} 
+                onClick={openStandaloneScanner} 
                 variant="outline"
                 className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
               >
@@ -628,7 +666,7 @@ export default function Inventory() {
                     ) : (
                       <div className="flex gap-2">
                         <Button 
-                          onClick={() => setScannerDialogOpen(true)}
+                          onClick={openStandaloneScanner}
                           variant="outline"
                           className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                         >
@@ -653,23 +691,6 @@ export default function Inventory() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left p-4 font-medium text-gray-600">Product</th>
-                        <th className="text-left p-4 font-medium text-gray-600 cursor-pointer" onClick={() => toggleSort("sku")}>
-                          <div className="flex items-center">
-                            SKU
-                            {sortField === "sku" && (
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-medium text-gray-600 cursor-pointer" onClick={() => toggleSort("price")}>
-                          <div className="flex items-center">
-                            Price
-                            {sortField === "price" && (
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            )}
-                          </div>
-                        </th>
                         <th className="text-left p-4 font-medium text-gray-600 cursor-pointer" onClick={() => toggleSort("quantity")}>
                           <div className="flex items-center">
                             Quantity
@@ -799,7 +820,7 @@ export default function Inventory() {
                               <div className="flex gap-2 justify-center">
                                 <Button 
                                   size="sm"
-                                  onClick={() => setScannerDialogOpen(true)}
+                                  onClick={openStandaloneScanner}
                                   variant="outline"
                                   className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                                 >
@@ -829,7 +850,11 @@ export default function Inventory() {
       {/* Barcode Scanner Component */}
       <BarcodeScanner
         isOpen={scannerDialogOpen}
-        onClose={() => setScannerDialogOpen(false)}
+        onClose={() => {
+          setScannerDialogOpen(false)
+          setScannerMode('standalone')
+          setIsScanningForSku(false)
+        }}
         onScanResult={handleScanResult}
         existingItems={inventory}
       />
@@ -880,6 +905,7 @@ export default function Inventory() {
                     size="sm"
                     onClick={generateSkuForItem}
                     className="px-3"
+                    title="Generate SKU from product name"
                   >
                     <Hash className="h-4 w-4" />
                   </Button>
@@ -887,8 +913,9 @@ export default function Inventory() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setScannerDialogOpen(true)}
-                    className="px-3"
+                    onClick={openScannerForSku}
+                    className={`px-3 ${isScanningForSku ? 'bg-indigo-100 border-indigo-300' : ''}`}
+                    title="Scan barcode for SKU"
                   >
                     <QrCode className="h-4 w-4" />
                   </Button>
@@ -897,6 +924,13 @@ export default function Inventory() {
                   <Alert className="border-red-200 bg-red-50">
                     <AlertDescription className="text-red-700 text-sm">
                       {skuValidation.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {isScanningForSku && (
+                  <Alert className="border-indigo-200 bg-indigo-50">
+                    <AlertDescription className="text-indigo-700 text-sm">
+                      Scanner is open - scan a barcode to populate this field
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1090,5 +1124,4 @@ export default function Inventory() {
       </DialogContent>
     </Dialog>
   </NavbarLayout>
-);
-}
+)}
