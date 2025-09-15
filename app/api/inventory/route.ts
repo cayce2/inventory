@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
 
     // Extract and validate data
     const name = formData.get("name") as string
+    const sku = formData.get("sku") as string
     const quantityStr = formData.get("quantity") as string
     const priceStr = formData.get("price") as string
     const lowStockThresholdStr = formData.get("lowStockThreshold") as string
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     try {
       inventoryItemSchema.parse({
         name,
+        sku,
         quantity,
         price,
         lowStockThreshold,
@@ -60,6 +62,22 @@ export async function POST(req: NextRequest) {
           details: validationError.errors || validationError.message,
         },
         { status: 400 },
+      )
+    }
+
+    const client = await clientPromise
+    const db = client.db("inventory_management")
+
+    // Check for SKU uniqueness within user's inventory
+    const existingSku = await db.collection("inventory").findOne({ 
+      userId, 
+      sku: sku.toUpperCase() 
+    })
+
+    if (existingSku) {
+      return NextResponse.json(
+        { error: "SKU already exists in your inventory" }, 
+        { status: 400 }
       )
     }
 
@@ -76,16 +94,16 @@ export async function POST(req: NextRequest) {
     // Convert the image to base64
     const base64Image = compressedImageBuffer.toString("base64")
 
-    const client = await clientPromise
-    const db = client.db("inventory_management")
-
     const result = await db.collection("inventory").insertOne({
       userId,
       name,
+      sku: sku.toUpperCase(), // Store SKU in uppercase for consistency
       quantity,
       price,
       lowStockThreshold,
       image: base64Image,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     return NextResponse.json({ message: "Item added successfully", itemId: result.insertedId }, { status: 201 })
@@ -107,6 +125,7 @@ export async function PUT(req: NextRequest) {
     // Extract data
     const _id = formData.get("_id") as string
     const name = formData.get("name") as string
+    const sku = formData.get("sku") as string
     const quantityStr = formData.get("quantity") as string
     const priceStr = formData.get("price") as string
     const lowStockThresholdStr = formData.get("lowStockThreshold") as string
@@ -130,6 +149,7 @@ export async function PUT(req: NextRequest) {
     try {
       inventoryItemSchema.parse({
         name,
+        sku,
         quantity,
         price,
         lowStockThreshold,
@@ -147,11 +167,27 @@ export async function PUT(req: NextRequest) {
     const client = await clientPromise
     const db = client.db("inventory_management")
 
+    // Check for SKU uniqueness (excluding current item)
+    const existingSku = await db.collection("inventory").findOne({ 
+      userId, 
+      sku: sku.toUpperCase(),
+      _id: { $ne: new ObjectId(_id) }
+    })
+
+    if (existingSku) {
+      return NextResponse.json(
+        { error: "SKU already exists in your inventory" }, 
+        { status: 400 }
+      )
+    }
+
     const updateData: any = {
       name,
+      sku: sku.toUpperCase(), // Store SKU in uppercase for consistency
       quantity,
       price,
       lowStockThreshold,
+      updatedAt: new Date(),
     }
 
     if (imageFile) {
@@ -214,16 +250,22 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 })
     }
 
-    // Update the item quantity
+    // Update the item quantity and timestamp
     await db
       .collection("inventory")
-      .updateOne({ _id: new ObjectId(itemId), userId }, { $inc: { quantity: quantity } })
+      .updateOne({ _id: new ObjectId(itemId), userId }, { 
+        $inc: { quantity: quantity },
+        $set: { updatedAt: new Date() }
+      })
 
     // Add a restock record with previous quantity
     const restockRecord = {
       itemId: new ObjectId(itemId),
+      itemName: currentItem.name,
+      itemSku: currentItem.sku,
       quantity,
       previousQuantity: currentItem.quantity,
+      newQuantity: currentItem.quantity + quantity,
       date: new Date(),
       userId: new ObjectId(userId),
     }
@@ -276,4 +318,3 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "An error occurred while deleting the item" }, { status: 500 })
   }
 }
-

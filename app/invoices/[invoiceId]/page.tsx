@@ -906,7 +906,7 @@ export default function InvoiceDetailPage() {
                         invoice={invoice}
                         customer={customer}
                         payments={payments}
-                        amountDue={calculateAmountDue()} inventory={[]} invoiceNumber={""} invoiceItems={[]} amount={0} dueDate={""} status={"paid"}                      />
+                        amountDue={calculateAmountDue()} inventory={[]} invoiceNumber={""} invoiceItems={[]} amount={0} dueDate={""} status={"paid"} currency={""}                      />
                     </div>
                   </div>
                 </div>

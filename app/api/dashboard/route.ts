@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import { authMiddleware } from "@/lib/auth-middleware"
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns"
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,49 +30,105 @@ export async function GET(req: NextRequest) {
       })
       .toArray()
 
-    // Invoice data
-    const invoices = await db.collection("invoices").find({ userId }).toArray()
+    // Invoice data - excluding deleted invoices
+    const invoices = await db.collection("invoices").find({ 
+      userId, 
+      deleted: { $ne: true } // Exclude deleted invoices
+    }).toArray()
+    
     const totalIncome = invoices.reduce((sum, invoice) => sum + (invoice.status === "paid" ? invoice.amount : 0), 0)
     const unpaidInvoices = invoices.filter((invoice) => invoice.status === "unpaid").length
 
     // Generate trend data for the past 6 months
     const trendData = await generateMonthlyRevenueTrend(db, userId, 6)
+
+    // Calculate trends safely, handling missing data for new accounts
     
-    // Calculate month-over-month trends for stat cards
+    // 1. Revenue trend calculation
     const currentMonthRevenue = trendData[trendData.length - 1]?.value || 0
     const previousMonthRevenue = trendData[trendData.length - 2]?.value || 0
-    const revenueTrend = previousMonthRevenue ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue * 100).toFixed(1) : '0'
+    let revenueTrend = null
     
-    // Get previous month's inventory count for trend calculation
+    if (previousMonthRevenue > 0) {
+      revenueTrend = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+    }
+    
+    // 2. Get previous month's inventory count for trend calculation
     const previousMonthDate = subMonths(new Date(), 1)
-    const previousMonthItemCount = await db.collection("inventory_history").findOne({
+    const previousMonthInventoryData = await db.collection("inventory_history").findOne({
       userId,
       month: format(previousMonthDate, 'yyyy-MM')
     })
     
-    const inventoryTrend = previousMonthItemCount?.totalItems 
-      ? ((totalItems - previousMonthItemCount.totalItems) / previousMonthItemCount.totalItems * 100).toFixed(1) 
-      : '2.5' // Default value if no history
-
-    // Calculate low stock trend
-    const previousMonthLowStock = await db.collection("inventory_history").findOne({
+    let inventoryTrend = null
+    
+    if (previousMonthInventoryData && previousMonthInventoryData.totalItems > 0) {
+      inventoryTrend = ((totalItems - previousMonthInventoryData.totalItems) / previousMonthInventoryData.totalItems) * 100
+    }
+    
+    // 3. Calculate low stock trend
+    let lowStockTrend = null
+    
+    if (previousMonthInventoryData && previousMonthInventoryData.lowStockCount !== undefined) {
+      if (previousMonthInventoryData.lowStockCount > 0) {
+        lowStockTrend = ((lowStockItems.length - previousMonthInventoryData.lowStockCount) / previousMonthInventoryData.lowStockCount) * 100
+      } else if (previousMonthInventoryData.lowStockCount === 0 && lowStockItems.length > 0) {
+        // If there were no low stock items before but now there are, show as 100% increase
+        lowStockTrend = 100
+      } else if (previousMonthInventoryData.lowStockCount === 0 && lowStockItems.length === 0) {
+        // If there were no low stock items before and none now, show as 0% change
+        lowStockTrend = 0
+      }
+    }
+    
+    // 4. Calculate unpaid invoice trend
+    const previousMonthInvoiceData = await db.collection("invoice_history").findOne({
       userId,
       month: format(previousMonthDate, 'yyyy-MM')
     })
     
-    const lowStockTrend = previousMonthLowStock?.lowStockCount 
-      ? ((lowStockItems.length - previousMonthLowStock.lowStockCount) / previousMonthLowStock.lowStockCount * 100).toFixed(1) 
-      : '-1.8' // Default value if no history
-
-    // Calculate unpaid invoice trend
-    const previousMonthUnpaid = await db.collection("invoice_history").findOne({
-      userId,
-      month: format(previousMonthDate, 'yyyy-MM')
-    })
+    let unpaidInvoiceTrend = null
     
-    const unpaidTrend = previousMonthUnpaid?.unpaidCount 
-      ? ((unpaidInvoices - previousMonthUnpaid.unpaidCount) / previousMonthUnpaid.unpaidCount * 100).toFixed(1) 
-      : '-0.7' // Default value if no history
+    if (previousMonthInvoiceData && previousMonthInvoiceData.unpaidCount !== undefined) {
+      if (previousMonthInvoiceData.unpaidCount > 0) {
+        unpaidInvoiceTrend = ((unpaidInvoices - previousMonthInvoiceData.unpaidCount) / previousMonthInvoiceData.unpaidCount) * 100
+      } else if (previousMonthInvoiceData.unpaidCount === 0 && unpaidInvoices > 0) {
+        // If there were no unpaid invoices before but now there are, show as 100% increase
+        unpaidInvoiceTrend = 100
+      } else if (previousMonthInvoiceData.unpaidCount === 0 && unpaidInvoices === 0) {
+        // If there were no unpaid invoices before and none now, show as 0% change
+        unpaidInvoiceTrend = 0
+      }
+    }
+    
+    // Store current month's data for future trend calculations
+    const currentMonth = format(new Date(), 'yyyy-MM')
+    
+    // Create/update inventory history for current month
+    await db.collection("inventory_history").updateOne(
+      { userId, month: currentMonth },
+      { 
+        $set: { 
+          totalItems,
+          lowStockCount: lowStockItems.length,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
+    
+    // Create/update invoice history for current month
+    await db.collection("invoice_history").updateOne(
+      { userId, month: currentMonth },
+      { 
+        $set: { 
+          totalInvoices: invoices.length,
+          unpaidCount: unpaidInvoices,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
 
     // Get revenue by category for the distribution chart
     const categories = await db.collection("inventory_categories").find({ userId }).toArray()
@@ -84,13 +141,13 @@ export async function GET(req: NextRequest) {
       {
         // Basic stats with trend data
         totalItems,
-        totalItemsTrend: parseFloat(inventoryTrend),
+        totalItemsTrend: inventoryTrend !== null ? parseFloat(inventoryTrend.toFixed(1)) : null,
         lowStockItems,
-        lowStockTrend: parseFloat(lowStockTrend),
+        lowStockTrend: lowStockTrend !== null ? parseFloat(lowStockTrend.toFixed(1)) : null,
         totalIncome,
-        revenueTrend: parseFloat(revenueTrend),
+        revenueTrend: revenueTrend !== null ? parseFloat(revenueTrend.toFixed(1)) : null,
         unpaidInvoices,
-        unpaidInvoicesTrend: parseFloat(unpaidTrend),
+        unpaidInvoicesTrend: unpaidInvoiceTrend !== null ? parseFloat(unpaidInvoiceTrend.toFixed(1)) : null,
         
         // Chart data
         trendData,
@@ -128,7 +185,8 @@ async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount =
         $gte: monthStart,
         $lte: monthEnd
       },
-      status: "paid"
+      status: "paid",
+      deleted: { $ne: true } // Exclude deleted invoices
     }).toArray()
     
     const monthlyRevenue = monthlyInvoices.reduce((sum: number, invoice: { amount: number }) => sum + invoice.amount, 0)
@@ -148,6 +206,14 @@ async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount =
 async function calculateRevenueByCategory(db: any, userId: string, categories: any[]) {
   const categoryRevenueData = []
   
+  // First, get all non-deleted invoices to find relevant invoice items
+  const validInvoices = await db.collection("invoices").find({
+    userId,
+    deleted: { $ne: true }
+  }).toArray()
+  
+  const validInvoiceIds = validInvoices.map((invoice: { _id: any }) => invoice._id)
+  
   for (const category of categories) {
     // Get all products in this category
     const products = await db.collection("inventory").find({
@@ -157,10 +223,11 @@ async function calculateRevenueByCategory(db: any, userId: string, categories: a
     
     const productIds = products.map((product: { _id: any }) => product._id)
     
-    // Calculate revenue from invoice items matching these products
+    // Calculate revenue from invoice items matching these products and from non-deleted invoices
     const invoiceItems = await db.collection("invoice_items").find({
       userId,
-      productId: { $in: productIds }
+      productId: { $in: productIds },
+      invoiceId: { $in: validInvoiceIds } // Only include items from non-deleted invoices
     }).toArray()
     
     const categoryRevenue = invoiceItems.reduce((sum: number, item: { price: number, quantity: number }) => sum + (item.price * item.quantity), 0)
@@ -174,7 +241,7 @@ async function calculateRevenueByCategory(db: any, userId: string, categories: a
   // If no categories found, create sample data
   if (categoryRevenueData.length === 0) {
     const totalIncome = await db.collection("invoices")
-      .find({ userId, status: "paid" })
+      .find({ userId, status: "paid", deleted: { $ne: true } })
       .toArray()
       .then((invoices: any[]) => invoices.reduce((sum: number, invoice: any) => sum + invoice.amount, 0))
     
@@ -204,7 +271,7 @@ async function calculateKPIs(db: any, userId: string) {
     { $group: { _id: null, total: { $sum: "$quantity" } } }
   ]).toArray().then((result: { _id: null, total: number }[]) => result[0]?.total || 0)
   
-  const inventoryTurnover = totalInventory ? (totalSold / totalInventory * 100) : 78
+  const inventoryTurnover = totalInventory ? (totalSold / totalInventory * 100) : 0
   
   // Revenue target
   const annualTarget = await db.collection("business_targets").findOne({ 
@@ -214,25 +281,25 @@ async function calculateKPIs(db: any, userId: string) {
   })
   
   const totalRevenue = await db.collection("invoices")
-    .find({ userId, status: "paid" })
+    .find({ userId, status: "paid", deleted: { $ne: true } })
     .toArray()
     .then((invoices: any[]) => invoices.reduce((sum: number, invoice: any) => sum + invoice.amount, 0))
   
-  const revenueTarget = annualTarget?.amount ? (totalRevenue / annualTarget.amount * 100) : 65
+  const revenueTarget = annualTarget?.amount ? (totalRevenue / annualTarget.amount * 100) : 0
   
   // Invoice collection
-  const allInvoices = await db.collection("invoices").countDocuments({ userId })
-  const paidInvoices = await db.collection("invoices").countDocuments({ userId, status: "paid" })
-  const invoiceCollection = allInvoices ? (paidInvoices / allInvoices * 100) : 92
+  const allInvoices = await db.collection("invoices").countDocuments({ userId, deleted: { $ne: true } })
+  const paidInvoices = await db.collection("invoices").countDocuments({ userId, status: "paid", deleted: { $ne: true } })
+  const invoiceCollection = allInvoices ? (paidInvoices / allInvoices * 100) : 0
   
   // Stock capacity
   const warehouseCapacity = await db.collection("warehouse_settings").findOne({ userId })
-  const stockCapacity = warehouseCapacity?.capacity ? (totalInventory / warehouseCapacity.capacity * 100) : 43
+  const stockCapacity = warehouseCapacity?.capacity ? (totalInventory / warehouseCapacity.capacity * 100) : 0
   
   return {
-    inventoryTurnover: Math.min(100, Math.round(inventoryTurnover)),
-    revenueTarget: Math.min(100, Math.round(revenueTarget)),
-    invoiceCollection: Math.min(100, Math.round(invoiceCollection)),
-    stockCapacity: Math.min(100, Math.round(stockCapacity))
+    inventoryTurnover: Math.min(100, Math.round(inventoryTurnover || 0)),
+    revenueTarget: Math.min(100, Math.round(revenueTarget || 0)),
+    invoiceCollection: Math.min(100, Math.round(invoiceCollection || 0)),
+    stockCapacity: Math.min(100, Math.round(stockCapacity || 0))
   }
 }

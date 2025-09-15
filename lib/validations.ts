@@ -16,6 +16,20 @@ export const objectIdSchema = z.string().refine(isValidObjectId, {
   message: "Invalid ObjectId format",
 })
 
+// SKU validation function
+export const validateSKU = (sku: string): boolean => {
+  // SKU should be alphanumeric, can include hyphens and underscores
+  const skuPattern = /^[A-Za-z0-9\-_]+$/;
+  return skuPattern.test(sku) && sku.length >= 3 && sku.length <= 50;
+};
+
+// Custom Zod schema for SKU
+export const skuSchema = z.string()
+  .min(3, "SKU must be at least 3 characters long")
+  .max(50, "SKU must be no more than 50 characters long")
+  .regex(/^[A-Za-z0-9\-_]+$/, "SKU must contain only letters, numbers, hyphens, and underscores")
+  .transform((val) => val.toUpperCase()) // Always store SKUs in uppercase
+
 // Auth schemas
 export const loginSchema = z.object({
   email: z.string().email("Invalid email format"),
@@ -53,9 +67,10 @@ export const notificationSettingsSchema = z.object({
   smsNotifications: z.boolean(),
 })
 
-// Inventory schemas
+// Inventory schemas - Updated to include SKU
 export const inventoryItemSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  sku: skuSchema,
   quantity: z.number().int().nonnegative("Quantity must be a non-negative integer"),
   price: z.number().positive("Price must be a positive number"),
   lowStockThreshold: z.number().int().nonnegative("Low stock threshold must be a non-negative integer"),
@@ -68,6 +83,11 @@ export const restockSchema = z.object({
 
 export const deleteItemSchema = z.object({
   itemId: objectIdSchema,
+})
+
+// SKU lookup schema for barcode scanning
+export const skuLookupSchema = z.object({
+  sku: skuSchema,
 })
 
 // Billing schemas
@@ -139,3 +159,44 @@ export const subscriptionActionSchema = z.object({
   action: z.enum(["initiate", "renew", "cancel"]),
 })
 
+// New schemas for sub-user management
+export const subUserCreateSchema = z.object({
+  name: z.string()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters")
+    .trim(),
+  email: z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim(),
+  role: z.enum(['ADMIN', 'EDITOR', 'VIEWER', 'MODERATOR'], {
+    errorMap: () => ({ message: "Role must be one of: ADMIN, EDITOR, VIEWER, MODERATOR" })
+  })
+})
+
+export const subUserUpdateSchema = z.object({
+  name: z.string()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters")
+    .trim()
+    .optional(),
+  email: z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim()
+    .optional(),
+  role: z.enum(['ADMIN', 'EDITOR', 'VIEWER', 'MODERATOR'], {
+    errorMap: () => ({ message: "Role must be one of: ADMIN, EDITOR, VIEWER, MODERATOR" })
+  }).optional()
+}).refine((data) => {
+  // At least one field must be provided
+  return data.name || data.email || data.role
+}, {
+  message: "At least one field (name, email, or role) must be provided for update"
+})
+
+export const subUserStatusSchema = z.object({
+  status: z.enum(['active', 'inactive', 'pending'], {
+    errorMap: () => ({ message: "Status must be one of: active, inactive, pending" })
+  })
+})

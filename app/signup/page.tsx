@@ -3,49 +3,61 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import axios from "axios"
-import { Eye, EyeOff, UserPlus, AlertCircle, Loader2, Mail, Lock, User, Phone, CheckCircle2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, User, Mail, Lock, ArrowRight, CheckCircle2, Phone } from "lucide-react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Checkbox } from "@/components/ui/checkbox"
 import NavbarLayout from "@/components/NavbarLayout"
 import Link from "next/link"
-import Image from "next/image"
-
 
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
     phone: "",
+    email: "",
     password: "",
-    agreeToTerms: false
+    acceptTerms: false,
   })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [touched, setTouched] = useState({
     name: false,
-    email: false,
     phone: false,
+    email: false,
     password: false,
-    agreeToTerms: false
+    acceptTerms: false,
   })
   const router = useRouter()
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }))
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
     setError("") // Clear error when user types
+  }
+
+  const handleCheckboxChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, acceptTerms: checked }))
+    setError("") // Clear error when user interacts with checkbox
   }
 
   const handleBlur = (field: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }))
   }
+
+  // Password strength indicators
+  const getPasswordStrength = (password: string) => {
+    if (!password) return { strength: 0, label: "" }
+    if (password.length < 6) return { strength: 1, label: "Weak" }
+    if (password.length < 10) return { strength: 2, label: "Medium" }
+    if (password.length >= 10) return { strength: 3, label: "Strong" }
+    return { strength: 0, label: "" }
+  }
+
+  const passwordStrength = getPasswordStrength(formData.password)
 
   const getFieldError = (field: string) => {
     if (!touched[field as keyof typeof touched]) return null
@@ -53,25 +65,40 @@ export default function Signup() {
     switch (field) {
       case "name":
         return !formData.name.trim() ? "Name is required" : null
+      case "phone":
+        return !formData.phone.trim() 
+          ? "Phone number is required" 
+          : !formData.phone.startsWith("+254") 
+            ? "Please enter a valid phone number starting with +254" 
+            : null
       case "email":
         return !formData.email.trim() 
           ? "Email is required" 
           : !formData.email.includes("@") 
             ? "Please enter a valid email" 
             : null
-      case "phone":
-        return !formData.phone.trim() ? "Phone number is required" : null
       case "password":
-        return !formData.password.trim()
-          ? "Password is required" 
-          : formData.password.length < 6
-            ? "Password must be at least 6 characters"
-            : null
-      case "agreeToTerms":
-        return !formData.agreeToTerms ? "You must agree to the terms" : null
+        return formData.password.length < 6 
+          ? "Password must be at least 6 characters" 
+          : null
+      case "acceptTerms":
+        return !formData.acceptTerms 
+          ? "You must accept the Terms and Conditions" 
+          : null
       default:
         return null
     }
+  }
+
+  const validateForm = () => {
+    if (!formData.name.trim()) return "Name is required"
+    if (!formData.phone.trim()) return "Phone number is required"
+    if (!formData.phone.startsWith("+254")) return "Please enter a valid phone number starting with +254"
+    if (!formData.email.trim()) return "Email is required"
+    if (!formData.email.includes("@")) return "Please enter a valid email"
+    if (formData.password.length < 6) return "Password must be at least 6 characters"
+    if (!formData.acceptTerms) return "You must accept the Terms and Conditions"
+    return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,62 +107,27 @@ export default function Signup() {
     // Touch all fields to show validation errors
     setTouched({
       name: true,
-      email: true,
       phone: true,
+      email: true,
       password: true,
-      agreeToTerms: true
+      acceptTerms: true,
     })
     
-    // Check for validation errors
-    const formErrors = [
-      getFieldError("name"),
-      getFieldError("email"),
-      getFieldError("phone"),
-      getFieldError("password"),
-      getFieldError("agreeToTerms")
-    ].filter(Boolean)
-    
-    if (formErrors.length > 0) {
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       return
     }
-    
+
     setError("")
     setIsLoading(true)
 
     try {
-      // First, create the user account
       await axios.post("/api/auth/signup", formData)
-
-      // Then attempt to log in
-      try {
-        const loginResponse = await axios.post("/api/auth/login", { 
-          email: formData.email, 
-          password: formData.password 
-        })
-        localStorage.setItem("token", loginResponse.data.token)
-        
-        // Brief delay to show loading state
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 500)
-      } catch (loginError) {
-        console.error("Login after signup failed:", loginError)
-        // Redirect to login with success message
-        router.push("/login?registered=true")
-      }
+      router.push("/login?registered=true")
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
-        if (error.response.data.details) {
-          // Handle validation errors
-          const validationErrors = error.response.data.details
-          if (Array.isArray(validationErrors)) {
-            setError(validationErrors.map((err) => err.message).join(", "))
-          } else {
-            setError(error.response.data.details || error.response.data.error || "An error occurred during signup")
-          }
-        } else {
-          setError(error.response.data.error || "An error occurred during signup")
-        }
+        setError(error.response.data.error || "An error occurred during signup")
       } else {
         setError("An unexpected error occurred")
       }
@@ -150,24 +142,14 @@ export default function Signup() {
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col justify-center items-center p-4">
         <div className="w-full max-w-md space-y-4">
           <div className="text-center space-y-2">
-          <div className="flex justify-center mb-2">
-              <Image 
-                src="/favicon.ico" 
-                alt="Logo" 
-                width={60} 
-                height={60} 
-                className="text-pink-600" 
-              />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">Create an account</h1>
-            <p className="text-gray-500">Sign up to get started with our service</p>
+            <h1 className="text-3xl font-bold tracking-tight">Join Us</h1>
+            <p className="text-gray-500">Create your account in just a few steps</p>
           </div>
           
           <Card className="border-0 shadow-lg">
             <CardContent className="pt-6">
               {error && (
                 <Alert variant="destructive" className="mb-6 animate-in fade-in-50 duration-300">
-                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
@@ -187,53 +169,19 @@ export default function Signup() {
                     <Input
                       id="name"
                       name="name"
-                      type="text"
                       placeholder="John Doe"
                       value={formData.name}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       onBlur={() => handleBlur("name")}
                       className={`pl-10 transition-all ${
                         touched.name && getFieldError("name") 
                           ? "border-red-500 ring-red-100" 
-                          : touched.name && !getFieldError("name") && formData.name.trim()
+                          : touched.name && !getFieldError("name")
                             ? "border-green-500 ring-green-100"
                             : ""
                       }`}
                     />
                     {touched.name && !getFieldError("name") && formData.name.trim() && (
-                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="email" className="text-sm font-medium">
-                      Email Address
-                    </label>
-                    {touched.email && getFieldError("email") && (
-                      <span className="text-xs text-red-500">{getFieldError("email")}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={formData.email}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("email")}
-                      className={`pl-10 transition-all ${
-                        touched.email && getFieldError("email") 
-                          ? "border-red-500 ring-red-100" 
-                          : touched.email && !getFieldError("email") && formData.email.includes("@")
-                            ? "border-green-500 ring-green-100"
-                            : ""
-                      }`}
-                    />
-                    {touched.email && !getFieldError("email") && formData.email.includes("@") && (
                       <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                     )}
                   </div>
@@ -253,20 +201,53 @@ export default function Signup() {
                     <Input
                       id="phone"
                       name="phone"
-                      type="tel"
-                      placeholder="(123) 456-7890"
+                      placeholder="+254 712 345 678"
                       value={formData.phone}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       onBlur={() => handleBlur("phone")}
                       className={`pl-10 transition-all ${
                         touched.phone && getFieldError("phone") 
                           ? "border-red-500 ring-red-100" 
-                          : touched.phone && !getFieldError("phone") && formData.phone.trim()
+                          : touched.phone && !getFieldError("phone")
                             ? "border-green-500 ring-green-100"
                             : ""
                       }`}
                     />
                     {touched.phone && !getFieldError("phone") && formData.phone.trim() && (
+                      <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">Format: +254 followed by your number (e.g., +254 712 345 678)</p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="email" className="text-sm font-medium">
+                      Email Address
+                    </label>
+                    {touched.email && getFieldError("email") && (
+                      <span className="text-xs text-red-500">{getFieldError("email")}</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="john.doe@example.com"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      onBlur={() => handleBlur("email")}
+                      className={`pl-10 transition-all ${
+                        touched.email && getFieldError("email") 
+                          ? "border-red-500 ring-red-100" 
+                          : touched.email && !getFieldError("email") && formData.email.includes("@")
+                            ? "border-green-500 ring-green-100"
+                            : ""
+                      }`}
+                    />
+                    {touched.email && !getFieldError("email") && formData.email.includes("@") && (
                       <CheckCircle2 className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                     )}
                   </div>
@@ -287,14 +268,14 @@ export default function Signup() {
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Create a strong password"
+                      placeholder="Create a secure password"
                       value={formData.password}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       onBlur={() => handleBlur("password")}
                       className={`pl-10 pr-10 transition-all ${
                         touched.password && getFieldError("password") 
                           ? "border-red-500 ring-red-100" 
-                          : touched.password && !getFieldError("password") && formData.password.trim().length >= 6
+                          : formData.password.length >= 6
                             ? "border-green-500 ring-green-100"
                             : ""
                       }`}
@@ -306,7 +287,6 @@ export default function Signup() {
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
                             className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
                           >
                             {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                           </button>
@@ -317,29 +297,73 @@ export default function Signup() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <input
-                      id="agreeToTerms"
-                      name="agreeToTerms"
-                      type="checkbox"
-                      checked={formData.agreeToTerms}
-                      onChange={handleChange}
-                      onBlur={() => handleBlur("agreeToTerms")}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="agreeToTerms" className="ml-2 text-sm text-gray-600">
-                      I agree to the{" "}
-                      <Link href="/terms" className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
-                        Terms and Conditions
-                      </Link>
-                    </label>
-                  </div>
-                  {touched.agreeToTerms && getFieldError("agreeToTerms") && (
-                    <span className="text-xs text-red-500 block">{getFieldError("agreeToTerms")}</span>
+                  
+                  {formData.password && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex gap-2">
+                        {[1, 2, 3].map((segment) => (
+                          <div 
+                            key={segment}
+                            className={`h-1 flex-1 rounded-full ${
+                              passwordStrength.strength >= segment 
+                                ? segment === 1 
+                                  ? "bg-red-400" 
+                                  : segment === 2 
+                                    ? "bg-yellow-400" 
+                                    : "bg-green-400"
+                                : "bg-gray-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      
+                      <div className="flex items-center text-xs justify-between">
+                        <p className="text-gray-500">
+                          {passwordStrength.label || "Enter a password"}
+                        </p>
+                        <p className="text-gray-500">
+                          Min 6 characters required
+                        </p>
+                      </div>
+                    </div>
                   )}
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox 
+                      id="acceptTerms" 
+                      checked={formData.acceptTerms}
+                      onCheckedChange={handleCheckboxChange}
+                      onBlur={() => handleBlur("acceptTerms")}
+                      className={`mt-1 ${
+                        touched.acceptTerms && !formData.acceptTerms 
+                          ? "border-red-500 ring-red-100" 
+                          : ""
+                      }`}
+                    />
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="acceptTerms"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        I accept the Terms and Conditions
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        By checking this box, you agree to our{" "}
+                        <Link href="/terms" className="text-indigo-600 hover:text-indigo-500 transition-colors">
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" className="text-indigo-600 hover:text-indigo-500 transition-colors">
+                          Privacy Policy
+                        </Link>.
+                      </p>
+                      {touched.acceptTerms && getFieldError("acceptTerms") && (
+                        <span className="text-xs text-red-500 block mt-1">{getFieldError("acceptTerms")}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <Button
@@ -350,12 +374,12 @@ export default function Signup() {
                   {isLoading ? (
                     <div className="flex items-center justify-center">
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Creating account...</span>
+                      <span>Creating your account...</span>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center">
-                      <UserPlus className="mr-2 h-4 w-4" />
                       <span>Create account</span>
+                      <ArrowRight className="ml-2 h-4 w-4" />
                     </div>
                   )}
                 </Button>
@@ -371,24 +395,6 @@ export default function Signup() {
               </p>
             </CardFooter>
           </Card>
-          
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <Link href="/rights" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Rights
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/privacy" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Privacy
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/terms" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Terms
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link href="/support" className="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-              Support
-            </Link>
-          </div>
         </div>
       </div>
     </NavbarLayout>
