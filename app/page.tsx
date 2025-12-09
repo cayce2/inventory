@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react';
 import Link from "next/link";
-import { ChevronRight, BarChart2, Package, Clock } from "lucide-react";
+import { ChevronRight, BarChart2, Package, Clock, Smartphone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
@@ -52,6 +52,21 @@ export default function Home() {
             >
               Sign Up Free
             </Link>
+            <a
+              href="https://expo.dev/artifacts/eas/b4FXPseyj2XC84Ph9wKBhE.apk"
+              download="stockske.apk"
+              className="group inline-flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-8 rounded-full text-lg transition-all duration-300 w-full sm:w-auto"
+            >
+              <Smartphone className="mr-2 w-5 h-5" />
+              Android
+            </a>
+            <button
+              disabled
+              className="inline-flex items-center justify-center bg-gray-400 text-white font-medium py-3 px-8 rounded-full text-lg cursor-not-allowed w-full sm:w-auto"
+            >
+              <Smartphone className="mr-2 w-5 h-5" />
+              iOS - Coming Soon
+            </button>
           </div>
         </div>
       </div>
