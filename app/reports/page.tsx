@@ -7,7 +7,7 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { Calendar, Download, DollarSign, AlertTriangle, Clock, Check, Lock, Eye, EyeOff, Settings } from "lucide-react"
+import { Calendar, Download, DollarSign, AlertTriangle, Clock, Check, Lock, Eye, EyeOff, Settings, Upload, FileDown } from "lucide-react"
 
 interface UnpaidInvoice {
   _id: string
@@ -50,6 +50,12 @@ export default function Reports() {
   const [showPassword, setShowPassword] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  
+  // Import/Export states
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [importResult, setImportResult] = useState<string>("")  
   
   const currency = 'KES'
   const router = useRouter()
@@ -253,6 +259,80 @@ export default function Reports() {
     setShowPasswordModal(true)
   }
 
+  const handleExportInventory = async () => {
+    setIsExporting(true)
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/login")
+        return
+      }
+
+      const response = await axios.get("/api/inventory/export", {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob"
+      })
+
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement("a")
+      link.href = url
+      link.setAttribute("download", "inventory_export.csv")
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error exporting inventory:", error)
+      setError("Failed to export inventory")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleImportInventory = async () => {
+    if (!importFile) {
+      setError("Please select a CSV file to import")
+      return
+    }
+
+    setIsImporting(true)
+    setError("")
+    setImportResult("")
+
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        router.push("/login")
+        return
+      }
+
+      const formData = new FormData()
+      formData.append("file", importFile)
+
+      const response = await axios.post("/api/inventory/import", formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      })
+
+      setImportResult(response.data.message)
+      if (response.data.errors && response.data.errors.length > 0) {
+        setError(`Import completed with errors: ${response.data.errors.join(", ")}`)
+      }
+      setImportFile(null)
+    } catch (error) {
+      console.error("Error importing inventory:", error)
+      if (axios.isAxiosError(error) && error.response) {
+        setError(error.response.data?.error || "Failed to import inventory")
+      } else {
+        setError("Failed to import inventory")
+      }
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
   const formatAmount = (value: number) => {
     return formatCurrency(value, currency);
   };
@@ -303,6 +383,71 @@ export default function Reports() {
                   <AlertTriangle className="text-rose-500" size={24} />
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Import/Export Section */}
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold text-slate-700 mb-4">Import & Export Inventory</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Export Card */}
+            <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+              <h3 className="text-lg font-medium text-slate-800 mb-3">Export Inventory</h3>
+              <p className="text-sm text-slate-600 mb-4">Download all your inventory items as a CSV file</p>
+              <button
+                onClick={handleExportInventory}
+                disabled={isExporting}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isExporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <FileDown size={16} />
+                    Export CSV
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Import Card */}
+            <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+              <h3 className="text-lg font-medium text-slate-800 mb-3">Import Inventory</h3>
+              <p className="text-sm text-slate-600 mb-4">Upload a CSV file with columns: Name, SKU, Quantity, Price, Low Stock Threshold</p>
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100"
+                />
+                <button
+                  onClick={handleImportInventory}
+                  disabled={isImporting || !importFile}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isImporting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Import CSV
+                    </>
+                  )}
+                </button>
+              </div>
+              {importResult && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-700">{importResult}</p>
+                </div>
+              )}
             </div>
           </div>
         </section>
