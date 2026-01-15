@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Package, DollarSign, AlertCircle, FileText, RefreshCw, TrendingUp, AlertTriangle, ArrowRight, ChevronRight } from "lucide-react";
+import { Package, DollarSign, AlertCircle, FileText, RefreshCw, TrendingUp, AlertTriangle, ArrowRight, ChevronRight, ChevronLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,6 +82,7 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [monthOffset, setMonthOffset] = useState(0);
   const currency = 'KES';  
 
   const router = useRouter();
@@ -92,10 +93,10 @@ export default function Dashboard() {
       router.push("/login");
       return;
     }
-    fetchDashboardStats();
-  }, [router]);
+    fetchDashboardStats(monthOffset);
+  }, [router, monthOffset]);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = async (offset = 0) => {
     try {
       setLoading(true);
       setError(null);
@@ -104,7 +105,7 @@ export default function Dashboard() {
         router.push("/login");
         return;
       }
-      const response = await axios.get("/api/dashboard", {
+      const response = await axios.get(`/api/dashboard?monthOffset=${offset}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setStats(response.data);
@@ -360,8 +361,31 @@ export default function Dashboard() {
               {/* Revenue trend card */}
               <Card className="shadow-sm border border-gray-100 overflow-hidden">
                 <CardHeader className="pb-2 border-b">
-                  <CardTitle className="text-xl text-gray-900">Revenue Trends</CardTitle>
-                  <CardDescription>Monthly revenue performance over the past 6 months</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xl text-gray-900">Revenue Trends</CardTitle>
+                      <CardDescription>Monthly revenue performance over the past 6 months</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMonthOffset(monthOffset + 6)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMonthOffset(Math.max(0, monthOffset - 6))}
+                        disabled={monthOffset === 0}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6">
                   <div className="h-[350px]">

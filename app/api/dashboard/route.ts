@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { searchParams } = new URL(req.url)
+    const monthOffset = parseInt(searchParams.get('monthOffset') || '0', 10)
+
     const client = await clientPromise
     const db = client.db("inventory_management")
 
@@ -39,8 +42,8 @@ export async function GET(req: NextRequest) {
     const totalIncome = invoices.reduce((sum, invoice) => sum + (invoice.status === "paid" ? invoice.amount : 0), 0)
     const unpaidInvoices = invoices.filter((invoice) => invoice.status === "unpaid").length
 
-    // Generate trend data for the past 6 months
-    const trendData = await generateMonthlyRevenueTrend(db, userId, 6)
+    // Generate trend data for the past 6 months with offset
+    const trendData = await generateMonthlyRevenueTrend(db, userId, 6, monthOffset)
 
     // Calculate trends safely, handling missing data for new accounts
     
@@ -170,12 +173,12 @@ export async function GET(req: NextRequest) {
 /**
  * Generate monthly revenue trend data for the specified number of months
  */
-async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount = 6) {
+async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount = 6, offset = 0) {
   const trendData = []
   const currentDate = new Date()
   
   for (let i = monthCount - 1; i >= 0; i--) {
-    const targetMonth = subMonths(currentDate, i)
+    const targetMonth = subMonths(currentDate, i + offset)
     const monthStart = startOfMonth(targetMonth)
     const monthEnd = endOfMonth(targetMonth)
     
@@ -192,7 +195,7 @@ async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount =
     const monthlyRevenue = monthlyInvoices.reduce((sum: number, invoice: { amount: number }) => sum + invoice.amount, 0)
     
     trendData.push({
-      name: format(targetMonth, 'MMM'),
+      name: format(targetMonth, 'MMM yyyy'),
       value: monthlyRevenue
     })
   }
