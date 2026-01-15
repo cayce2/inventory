@@ -140,6 +140,9 @@ export async function GET(req: NextRequest) {
     // Get KPI data
     const kpiData = await calculateKPIs(db, userId)
 
+    // Get comparison data
+    const comparisonData = await getComparisonData(db, userId, invoices)
+
     return NextResponse.json(
       {
         // Basic stats with trend data
@@ -158,6 +161,9 @@ export async function GET(req: NextRequest) {
         
         // KPI data
         kpiData,
+        
+        // Comparison data
+        ...comparisonData,
         
         // Last updated timestamp
         lastUpdated: new Date().toISOString()
@@ -304,5 +310,80 @@ async function calculateKPIs(db: any, userId: string) {
     revenueTarget: Math.min(100, Math.round(revenueTarget || 0)),
     invoiceCollection: Math.min(100, Math.round(invoiceCollection || 0)),
     stockCapacity: Math.min(100, Math.round(stockCapacity || 0))
+  }
+}
+
+/**
+ * Get comparison data for fast/slow moving items and analytics
+ */
+async function getComparisonData(db: any, userId: string, invoices: any[]) {
+  const validInvoiceIds = invoices.map((inv: any) => inv._id)
+  
+  // Get all invoice items with product details
+  const invoiceItems = await db.collection("invoice_items").aggregate([
+    { $match: { userId, invoiceId: { $in: validInvoiceIds } } },
+    { $group: {
+      _id: "$productId",
+      totalQuantity: { $sum: "$quantity" },
+      totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } }
+    }}
+  ]).toArray()
+  
+  // Get inventory items
+  const inventory = await db.collection("inventory").find({ userId }).toArray()
+  
+  // Calculate fast moving items
+  const itemsWithSales = invoiceItems.map((item: any) => {
+    const inventoryItem = inventory.find((inv: any) => inv._id.toString() === item._id?.toString())
+    return {
+      _id: item._id,
+      name: inventoryItem?.name || "Unknown",
+      quantity: inventoryItem?.quantity || 0,
+      soldQuantity: item.totalQuantity,
+      revenue: item.totalRevenue
+    }
+  }).filter((item: any) => item.name !== "Unknown")
+  
+  const fastMovingItems = itemsWithSales
+    .sort((a: any, b: any) => b.soldQuantity - a.soldQuantity)
+    .slice(0, 5)
+  
+  // Calculate slow moving items (items with low or no sales)
+  const soldProductIds = new Set(invoiceItems.map((item: any) => item._id?.toString()))
+  const slowMovingItems = inventory
+    .filter((item: any) => !soldProductIds.has(item._id.toString()) || 
+      (itemsWithSales.find((s: any) => s._id?.toString() === item._id.toString())?.soldQuantity || 0) < 5)
+    .map((item: any) => {
+      const sales = itemsWithSales.find((s: any) => s._id?.toString() === item._id.toString())
+      const daysSinceUpdate = Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+      return {
+        _id: item._id,
+        name: item.name,
+        quantity: item.quantity,
+        soldQuantity: sales?.soldQuantity || 0,
+        daysInStock: daysSinceUpdate
+      }
+    })
+    .sort((a: any, b: any) => a.soldQuantity - b.soldQuantity)
+    .slice(0, 5)
+  
+  // Calculate stock value
+  const stockValue = inventory.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0)
+  
+  // Calculate average sale value
+  const totalInvoiceCount = invoices.length
+  const totalRevenue = invoices.reduce((sum: number, inv: any) => sum + (inv.status === "paid" ? inv.amount : 0), 0)
+  const avgSaleValue = totalInvoiceCount > 0 ? totalRevenue / totalInvoiceCount : 0
+  
+  // Calculate collection rate
+  const paidInvoices = invoices.filter((inv: any) => inv.status === "paid").length
+  const collectionRate = totalInvoiceCount > 0 ? (paidInvoices / totalInvoiceCount) * 100 : 0
+  
+  return {
+    fastMovingItems,
+    slowMovingItems,
+    stockValue,
+    avgSaleValue,
+    collectionRate
   }
 }

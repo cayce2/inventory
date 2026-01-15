@@ -45,6 +45,23 @@ interface DashboardStats {
     invoiceCollection: number;
     stockCapacity: number;
   };
+  fastMovingItems?: Array<{
+    _id: string;
+    name: string;
+    quantity: number;
+    soldQuantity: number;
+    revenue: number;
+  }>;
+  slowMovingItems?: Array<{
+    _id: string;
+    name: string;
+    quantity: number;
+    soldQuantity: number;
+    daysInStock: number;
+  }>;
+  stockValue?: number;
+  avgSaleValue?: number;
+  collectionRate?: number;
   lastUpdated?: string;
 }
 
@@ -342,12 +359,18 @@ export default function Dashboard() {
             defaultValue="overview" 
             className="mb-8 space-y-8"
           >
-            <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 mx-auto bg-white-100 p-1 rounded-lg">
+            <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8 mx-auto bg-white-100 p-1 rounded-lg">
               <TabsTrigger 
                 value="overview"
                 className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
               >
                 Business Overview
+              </TabsTrigger>
+              <TabsTrigger 
+                value="comparison"
+                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700"
+              >
+                Comparison Data
               </TabsTrigger>
               <TabsTrigger 
                 value="inventory"
@@ -457,6 +480,153 @@ export default function Dashboard() {
                 </CardFooter>
               </Card>
 
+            </TabsContent>
+            
+            <TabsContent value="comparison" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-xl text-gray-900">Fast Moving Items</CardTitle>
+                    <CardDescription>Top selling products by quantity</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {loading ? (
+                      <div className="p-6 space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    ) : !stats.fastMovingItems || stats.fastMovingItems.length === 0 ? (
+                      <div className="text-center py-16">
+                        <TrendingUp className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                        <p className="text-gray-600 font-medium">No sales data available</p>
+                        <p className="text-gray-500 text-sm mt-1">Start selling to see fast moving items</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader className="bg-gray-50">
+                          <TableRow>
+                            <TableHead className="font-medium text-gray-700">Rank</TableHead>
+                            <TableHead className="font-medium text-gray-700">Item</TableHead>
+                            <TableHead className="font-medium text-gray-700">Stock</TableHead>
+                            <TableHead className="font-medium text-gray-700 text-right">Sold</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.fastMovingItems.map((item, index) => (
+                            <TableRow key={item._id} className="hover:bg-gray-50">
+                              <TableCell className="font-bold text-indigo-600">#{index + 1}</TableCell>
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              <TableCell>{item.quantity} units</TableCell>
+                              <TableCell className="text-right">
+                                <Badge className="bg-green-50 text-green-700 border-green-200">{item.soldQuantity}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-xl text-gray-900">Slow Moving Items</CardTitle>
+                    <CardDescription>Items with low turnover rate</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {loading ? (
+                      <div className="p-6 space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    ) : !stats.slowMovingItems || stats.slowMovingItems.length === 0 ? (
+                      <div className="text-center py-16">
+                        <Package className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                        <p className="text-gray-600 font-medium">No slow moving items</p>
+                        <p className="text-gray-500 text-sm mt-1">All items have good turnover</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader className="bg-gray-50">
+                          <TableRow>
+                            <TableHead className="font-medium text-gray-700">Item</TableHead>
+                            <TableHead className="font-medium text-gray-700">Stock</TableHead>
+                            <TableHead className="font-medium text-gray-700">Days</TableHead>
+                            <TableHead className="font-medium text-gray-700 text-right">Sold</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.slowMovingItems.map((item) => (
+                            <TableRow key={item._id} className="hover:bg-gray-50">
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              <TableCell>{item.quantity} units</TableCell>
+                              <TableCell>{item.daysInStock}d</TableCell>
+                              <TableCell className="text-right">
+                                <Badge className="bg-amber-50 text-amber-700 border-amber-200">{item.soldQuantity}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-lg text-gray-900">Stock Value</CardTitle>
+                    <CardDescription>Total inventory worth</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loading ? (
+                      <Skeleton className="h-16 w-full" />
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-3xl font-bold text-gray-900">{formatAmount(stats.stockValue || 0)}</p>
+                        <p className="text-sm text-gray-500">Based on current inventory</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-lg text-gray-900">Avg. Sale Value</CardTitle>
+                    <CardDescription>Per transaction</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loading ? (
+                      <Skeleton className="h-16 w-full" />
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-3xl font-bold text-gray-900">{formatAmount(stats.avgSaleValue || 0)}</p>
+                        <p className="text-sm text-gray-500">Average per invoice</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border border-gray-100">
+                  <CardHeader className="pb-2 border-b">
+                    <CardTitle className="text-lg text-gray-900">Collection Rate</CardTitle>
+                    <CardDescription>Payment efficiency</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loading ? (
+                      <Skeleton className="h-16 w-full" />
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-3xl font-bold text-gray-900">{Math.round(stats.collectionRate || 0)}%</p>
+                        <Progress value={stats.collectionRate || 0} className="h-2" />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
             
             <TabsContent value="inventory" className="space-y-6">
