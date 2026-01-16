@@ -266,7 +266,7 @@ async function calculateSalesVelocity(db: any, userId: string, invoices: any[]) 
     }
   })
   
-  return velocityData.sort((a, b) => b.soldLast30Days - a.soldLast30Days).slice(0, 10)
+  return velocityData.sort((a: any, b: any) => b.soldLast30Days - a.soldLast30Days).slice(0, 10)
 }
 
 async function calculateProductMix(db: any, userId: string, invoices: any[]) {
