@@ -206,13 +206,23 @@ export default function Dashboard() {
                   </p>
                 )}
               </div>
-              <Button 
-                onClick={() => fetchDashboardStats()}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => router.push('/analytics/enhanced')}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Enhanced Analytics
+                </Button>
+                <Button 
+                  onClick={() => fetchDashboardStats()}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh
+                </Button>
+              </div>
             </div>
             <Separator className="mt-6" />
           </motion.div>
@@ -244,7 +254,7 @@ export default function Dashboard() {
                 title="Total Inventory"
                 value={stats.totalItems}
                 icon={Package}
-                description="Total items tracked in inventory"
+                description={`${formatAmount(stats.stockValue || 0)} in stock`}
                 trend={stats.totalItemsTrend}
                 loading={loading}
                 bgColor="bg-blue-50"

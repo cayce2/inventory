@@ -92,8 +92,19 @@ export default function Analytics() {
     <NavbarLayout>
       <div className="min-h-screen bg-slate-50 p-6 md:p-8">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">Sales Analytics</h1>
-          <p className="text-slate-500 mt-2">Comprehensive insights into your business performance</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800">Sales Analytics</h1>
+              <p className="text-slate-500 mt-2">Comprehensive insights into your business performance</p>
+            </div>
+            <button
+              onClick={() => router.push('/analytics/enhanced')}
+              className="bg-indigo-600 text-white py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+            >
+              <TrendingUp size={16} />
+              Enhanced Analytics
+            </button>
+          </div>
         </header>
 
         {/* Date Filter */}
