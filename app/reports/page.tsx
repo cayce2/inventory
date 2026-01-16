@@ -7,7 +7,8 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
-import { Calendar, Download, DollarSign, AlertTriangle, Clock, Check, Lock, Eye, EyeOff, Settings, Upload, FileDown } from "lucide-react"
+import { Calendar, Download, DollarSign, AlertTriangle, Clock, Check, Lock, Eye, EyeOff, Settings, Upload, FileDown, TrendingUp, BarChart3 } from "lucide-react"
+import Link from "next/link"
 
 interface UnpaidInvoice {
   _id: string
@@ -38,6 +39,7 @@ export default function Reports() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [useCustomDateRange, setUseCustomDateRange] = useState(false)
+  const [itemSalesSummary, setItemSalesSummary] = useState<any[]>([])
   
   // Password protection states
   const [downloadPassword, setDownloadPassword] = useState("")
@@ -109,6 +111,7 @@ export default function Reports() {
       setUnpaidInvoiceAmount(response.data.unpaidInvoiceAmount)
       setOverdueInvoiceAmount(response.data.overdueInvoiceAmount)
       setUnpaidInvoices(response.data.unpaidInvoices)
+      setItemSalesSummary(response.data.itemSalesSummary || [])
     } catch (error) {
       console.error("Error fetching report data:", error)
       setError("An error occurred while fetching report data. Please try again.")
@@ -341,8 +344,19 @@ export default function Reports() {
     <NavbarLayout>
       <div className="min-h-screen bg-slate-50 p-6 md:p-8">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">Reports Dashboard</h1>
-          <p className="text-slate-500 mt-2">View and analyze your business performance</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800">Reports Dashboard</h1>
+              <p className="text-slate-500 mt-2">View and analyze your business performance</p>
+            </div>
+            <Link
+              href="/analytics"
+              className="bg-blue-600 text-white py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <BarChart3 size={20} />
+              View Analytics
+            </Link>
+          </div>
         </header>
 
         {/* Financial Summary Cards */}
@@ -384,6 +398,40 @@ export default function Reports() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Item Sales Summary */}
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold text-slate-700 mb-4">Item Sales Summary</h2>
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            {itemSalesSummary.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 font-medium text-slate-600">Item Name</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-600">Total Sold</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-600">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itemSalesSummary.map((item) => (
+                      <tr key={item._id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4 font-medium text-slate-800">{item.name}</td>
+                        <td className="py-3 px-4 text-slate-600">{item.totalSold}</td>
+                        <td className="py-3 px-4 font-medium text-emerald-600">{formatAmount(item.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <TrendingUp className="mx-auto h-12 w-12 text-slate-300 mb-4" />
+                <p className="text-slate-500">No sales data available for the selected period</p>
+              </div>
+            )}
           </div>
         </section>
 

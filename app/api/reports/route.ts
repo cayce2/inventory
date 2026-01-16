@@ -337,6 +337,39 @@ export async function POST(req: NextRequest) {
       itemName: itemMap.get(record.itemId.toString())?.name || "Unknown",
     }))
 
+    // Calculate item sales summary
+    const itemSalesMap = new Map<string, { totalSold: number; revenue: number }>()
+    
+    for (const invoice of invoices) {
+      if (invoice.status === "paid") {
+        for (const item of invoice.items) {
+          const itemId = item.itemId.toString()
+          const price = item.adjustedPrice !== undefined ? item.adjustedPrice : (itemMap.get(itemId)?.price || 0)
+          const revenue = price * item.quantity
+
+          if (itemSalesMap.has(itemId)) {
+            const existing = itemSalesMap.get(itemId)!
+            existing.totalSold += item.quantity
+            existing.revenue += revenue
+          } else {
+            itemSalesMap.set(itemId, {
+              totalSold: item.quantity,
+              revenue: revenue,
+            })
+          }
+        }
+      }
+    }
+
+    const itemSalesSummary = Array.from(itemSalesMap.entries())
+      .map(([itemId, data]) => ({
+        _id: itemId,
+        name: itemMap.get(itemId)?.name || "Unknown Item",
+        totalSold: data.totalSold,
+        revenue: data.revenue,
+      }))
+      .sort((a, b) => b.totalSold - a.totalSold)
+
     return NextResponse.json(
       {
         totalIncome,
@@ -344,6 +377,7 @@ export async function POST(req: NextRequest) {
         overdueInvoiceAmount,
         unpaidInvoices: unpaidInvoicesWithItems,
         restockHistory: restockHistoryWithItems,
+        itemSalesSummary,
       },
       { status: 200 },
     )
