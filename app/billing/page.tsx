@@ -333,7 +333,7 @@ export default function Billing() {
   };
   
 
-  const handleInvoiceAction = async (invoiceId: string, action: string, data?: any) => {
+  const handleInvoiceAction = async (invoiceId: string, action: string, data?: { dueDate?: string }) => {
     setError(null)
     try {
       setIsLoading(true)
