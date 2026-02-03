@@ -47,7 +47,7 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
     }
 
     // Validate action value
-    const validActions = ["markPaid", "markUnpaid", "delete", "restore"]
+    const validActions = ["markPaid", "markUnpaid", "delete", "restore", "updateDueDate"]
     if (!validActions.includes(action)) {
       console.error("Invalid action:", action)
       return NextResponse.json({ error: "Invalid action. Must be one of: " + validActions.join(", ") }, { status: 400 })
@@ -115,6 +115,12 @@ export async function PUT(req: NextRequest, { params }: { params: { invoiceId: s
           break
         case "restore":
           updateData = { deleted: false }
+          break
+        case "updateDueDate":
+          if (!data.dueDate) {
+            return NextResponse.json({ error: "Due date is required" }, { status: 400 })
+          }
+          updateData = { dueDate: data.dueDate }
           break
       }
     }

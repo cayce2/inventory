@@ -79,6 +79,8 @@ export default function Billing() {
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [editingDueDate, setEditingDueDate] = useState<string | null>(null)
+  const [tempDueDate, setTempDueDate] = useState("")
   const currency = 'KES'; 
 
 
@@ -331,12 +333,12 @@ export default function Billing() {
   };
   
 
-  const handleInvoiceAction = async (invoiceId: string, action: string) => {
+  const handleInvoiceAction = async (invoiceId: string, action: string, data?: any) => {
     setError(null)
     try {
       setIsLoading(true)
       const token = localStorage.getItem("token")
-      const payload = { action }
+      const payload = { action, ...data }
 
       await axios({
         method: "put",
@@ -364,6 +366,24 @@ export default function Billing() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleDueDateEdit = (invoiceId: string, currentDueDate: string) => {
+    setEditingDueDate(invoiceId)
+    setTempDueDate(currentDueDate)
+  }
+
+  const handleDueDateSave = async (invoiceId: string) => {
+    if (tempDueDate) {
+      await handleInvoiceAction(invoiceId, "updateDueDate", { dueDate: tempDueDate })
+    }
+    setEditingDueDate(null)
+    setTempDueDate("")
+  }
+
+  const handleDueDateCancel = () => {
+    setEditingDueDate(null)
+    setTempDueDate("")
   }
 
   const handlePrint = (invoice: Invoice) => {
@@ -614,12 +634,46 @@ export default function Billing() {
                                   dueStatus === 'overdue' ? 'bg-red-500' : 
                                   dueStatus === 'due-soon' ? 'bg-yellow-500' : 'bg-green-500'
                                 }`}></span>
-                                <span>
-                                  {new Date(invoice.dueDate).toLocaleDateString()}
-                                  {dueStatus === 'overdue' && invoice.status === 'unpaid' && (
-                                <span className="ml-1 text-xs text-red-500 font-medium">OVERDUE</span>
-                                  )}
-                                </span>
+                                {editingDueDate === invoice._id ? (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="date"
+                                      value={tempDueDate}
+                                      onChange={(e) => setTempDueDate(e.target.value)}
+                                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleDueDateSave(invoice._id)
+                                        if (e.key === 'Escape') handleDueDateCancel()
+                                      }}
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => handleDueDateSave(invoice._id)}
+                                      className="text-green-600 hover:text-green-800"
+                                      title="Save"
+                                    >
+                                      <CheckCircle size={14} />
+                                    </button>
+                                    <button
+                                      onClick={handleDueDateCancel}
+                                      className="text-red-600 hover:text-red-800"
+                                      title="Cancel"
+                                    >
+                                      <XCircle size={14} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span 
+                                    className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                                    onClick={() => handleDueDateEdit(invoice._id, invoice.dueDate)}
+                                    title="Click to edit due date"
+                                  >
+                                    {new Date(invoice.dueDate).toLocaleDateString()}
+                                    {dueStatus === 'overdue' && invoice.status === 'unpaid' && (
+                                      <span className="ml-1 text-xs text-red-500 font-medium">OVERDUE</span>
+                                    )}
+                                  </span>
+                                )}
                               </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
