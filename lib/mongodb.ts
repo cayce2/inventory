@@ -1,4 +1,10 @@
 import { MongoClient } from "mongodb"
+import dns from "dns"
+
+// Fix DNS resolution for Windows/Node.js
+if (process.env.NODE_ENV === "development") {
+  dns.setDefaultResultOrder("ipv4first")
+}
 
 const uri = process.env.MONGODB_URI
 
@@ -18,11 +24,15 @@ const getClientPromise = () => {
     return clientPromise
   }
 
+  const options = process.env.NODE_ENV === "development" 
+    ? { family: 4 } // Force IPv4 in development
+    : {}
+
   if (process.env.NODE_ENV === "development") {
     // Preserve the promise across HMR reloads in dev.
     const globalWithMongo = global as MongoGlobal
     if (!globalWithMongo._mongoClientPromise) {
-      client = new MongoClient(uri)
+      client = new MongoClient(uri, options)
       globalWithMongo._mongoClientPromise = client.connect()
     }
     clientPromise = globalWithMongo._mongoClientPromise
@@ -30,7 +40,7 @@ const getClientPromise = () => {
   }
 
   // In production, initialize a new client on first use.
-  client = new MongoClient(uri)
+  client = new MongoClient(uri, options)
   clientPromise = client.connect()
   return clientPromise
 }

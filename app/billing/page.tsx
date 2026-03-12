@@ -4,7 +4,7 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import axios from "axios"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
 import { 
   Trash2, 
@@ -75,6 +75,7 @@ export default function Billing() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<"all" | "paid" | "unpaid">("all")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const printRef = useRef<HTMLDivElement>(null)
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -93,6 +94,13 @@ export default function Billing() {
     fetchInvoices()
     fetchInventory()
   }, [router])
+
+  useEffect(() => {
+    const shouldCreate = searchParams?.get("create") === "1"
+    if (shouldCreate) {
+      setIsCreatingInvoice(true)
+    }
+  }, [searchParams])
 
   const fetchInvoices = async () => {
     try {

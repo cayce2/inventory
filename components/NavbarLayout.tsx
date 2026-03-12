@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import axios from "axios"
 import NotificationBell from "./NotificationBell"
+import AIChatWidget from "./AIChatWidget"
 
 export default function NavbarLayout({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -194,7 +195,6 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
   // Navigation links with icons
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: "/assistant", label: "AI Assistant", icon: <Bot className="w-5 h-5" />, showAlertBadge: true },
     { href: "/inventory", label: "Inventory", icon: <Package className="w-5 h-5" /> },
     { href: "/billing", label: "Billing", icon: <Receipt className="w-5 h-5" /> },
     { href: "/reports", label: "Reports", icon: <BarChart3 className="w-5 h-5" /> },
@@ -384,6 +384,7 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
       
       {/* Added padding-top to ensure content isn't hidden under the sticky navbar */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <AIChatWidget />
     </>
   )
 }
