@@ -47,8 +47,6 @@ function parseNumber(value?: string | null) {
 }
 
 function extractAddItemDetails(message: string) {
-  const text = message.toLowerCase()
-
   const nameMatch =
     message.match(/(?:called|named)\s+([a-z0-9\-_ ]+)/i) ||
     message.match(/add\s+(?:a|an|new)?\s*product\s+([a-z0-9\-_ ]+)/i) ||

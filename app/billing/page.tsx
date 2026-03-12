@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import axios from "axios"
 import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
@@ -50,7 +50,7 @@ const formatCurrency = (value: number, currencyCode = 'KES') => {
   })}`;
 };
 
-export default function Billing() {
+function BillingContent() {
   const generateInvoiceNumber = () => {
     return `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
   };
@@ -1056,4 +1056,12 @@ export default function Billing() {
         </div>
     </NavbarLayout>
   );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <BillingContent />
+    </Suspense>
+  )
 }

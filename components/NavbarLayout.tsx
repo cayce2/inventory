@@ -20,7 +20,6 @@ import {
   Receipt, 
   BarChart3, 
   CreditCard,
-  Bot,
   ShieldCheck 
 } from "lucide-react"
 import axios from "axios"
@@ -193,9 +192,9 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
   }
 
   // Navigation links with icons
-  const navLinks = [
+  const navLinks: Array<{ href: string; label: string; icon: React.ReactNode; showAlertBadge?: boolean }> = [
     { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: "/inventory", label: "Inventory", icon: <Package className="w-5 h-5" /> },
+    { href: "/inventory", label: "Inventory", icon: <Package className="w-5 h-5" />, showAlertBadge: true },
     { href: "/billing", label: "Billing", icon: <Receipt className="w-5 h-5" /> },
     { href: "/reports", label: "Reports", icon: <BarChart3 className="w-5 h-5" /> },
     { href: "/subscription", label: "Subscription", icon: <CreditCard className="w-5 h-5" /> },
