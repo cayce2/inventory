@@ -11,6 +11,9 @@ export async function GET(req: NextRequest, { params }: { params: { itemId: stri
     }
 
     const { itemId } = params
+    if (!itemId || !ObjectId.isValid(itemId)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 })
+    }
 
     const client = await clientPromise
     const db = client.db("inventory_management")
@@ -29,9 +32,18 @@ export async function GET(req: NextRequest, { params }: { params: { itemId: stri
     }
 
     // Get user information
-    const itemUser = await db
-      .collection("users")
-      .findOne({ _id: new ObjectId(item.userId) }, { projection: { name: 1, email: 1 } })
+    let itemUser = null
+    if (item.userId) {
+      try {
+        const itemUserId =
+          typeof item.userId === "object" ? new ObjectId(item.userId.toString()) : new ObjectId(item.userId)
+        itemUser = await db
+          .collection("users")
+          .findOne({ _id: itemUserId }, { projection: { name: 1, email: 1 } })
+      } catch {
+        itemUser = null
+      }
+    }
 
     const itemWithUserInfo = {
       ...item,
@@ -54,6 +66,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { itemId: s
     }
 
     const { itemId } = params
+    if (!itemId || !ObjectId.isValid(itemId)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 })
+    }
 
     const client = await clientPromise
     const db = client.db("inventory_management")

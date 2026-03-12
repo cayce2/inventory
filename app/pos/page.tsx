@@ -63,7 +63,7 @@ export default function POSPage() {
   const receiptRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const barcodeParam = searchParams.get("barcode")
+  const barcodeParam = searchParams?.get("barcode") ?? ""
 
   // Detect mobile
   useEffect(() => {

@@ -60,7 +60,12 @@ export default function AdminInvoiceDetail() {
   const [error, setError] = useState("")
   const router = useRouter()
   const params = useParams()
-  const invoiceId = params.invoiceId as string
+  const invoiceId =
+    typeof params?.invoiceId === "string"
+      ? params.invoiceId
+      : Array.isArray(params?.invoiceId)
+        ? params.invoiceId[0]
+        : ""
   const currency = "KES"
 
   useEffect(() => {

@@ -1,0 +1,5 @@
+# Replace the MONGODB_URI in .env.local with this standard connection string:
+
+MONGODB_URI=mongodb://calebmumbi2:Hackerspremier!1997@inventory-shard-00-00.wmsfk.mongodb.net:27017,inventory-shard-00-01.wmsfk.mongodb.net:27017,inventory-shard-00-02.wmsfk.mongodb.net:27017/?ssl=true&replicaSet=atlas-zzqxqz-shard-0&authSource=admin&retryWrites=true&w=majority
+
+# This bypasses the SRV DNS lookup that's failing in Node.js v24

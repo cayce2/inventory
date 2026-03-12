@@ -144,7 +144,12 @@ const ActionButton = ({ icon, label, onClick, variant, disabled, isLoading }: Ac
 export default function InvoiceDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const invoiceId = params.invoiceId as string
+  const invoiceId =
+    typeof params?.invoiceId === "string"
+      ? params.invoiceId
+      : Array.isArray(params?.invoiceId)
+        ? params.invoiceId[0]
+        : ""
 
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -163,7 +168,9 @@ export default function InvoiceDetailPage() {
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    fetchInvoiceDetails()
+    if (invoiceId) {
+      fetchInvoiceDetails()
+    }
   }, [invoiceId])
 
   const fetchInvoiceDetails = async () => {

@@ -75,7 +75,12 @@ interface UserStats {
 export default function UserDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const userId = params.userId as string
+  const userId =
+    typeof params?.userId === "string"
+      ? params.userId
+      : Array.isArray(params?.userId)
+        ? params.userId[0]
+        : ""
 
   const [user, setUser] = useState<User | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
@@ -21,11 +21,7 @@ export default function EnhancedAnalytics() {
   const [period, setPeriod] = useState('30days')
   const router = useRouter()
 
-  useEffect(() => {
-    fetchAnalytics()
-  }, [period])
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem("token")
@@ -43,7 +39,11 @@ export default function EnhancedAnalytics() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [period, router])
+
+  useEffect(() => {
+    fetchAnalytics()
+  }, [period, fetchAnalytics])
 
   if (loading) {
     return (

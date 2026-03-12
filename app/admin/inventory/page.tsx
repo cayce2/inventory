@@ -41,7 +41,7 @@ export default function AdminInventory() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const userId = searchParams.get("userId")
+  const userId = searchParams?.get("userId") ?? null
   const currency = "KES" 
   
   // Adding a ref to track if the component has already performed the initial fetch

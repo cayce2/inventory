@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import axios from "axios"
 import { useRouter } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
@@ -41,13 +41,8 @@ export default function Analytics() {
   const [useCustomDateRange, setUseCustomDateRange] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    if (!useCustomDateRange) {
-      fetchAnalytics(selectedPeriod)
-    }
-  }, [selectedPeriod])
-
-  const fetchAnalytics = async (period: string, customStartDate?: string, customEndDate?: string) => {
+  const fetchAnalytics = useCallback(
+    async (period: string, customStartDate?: string, customEndDate?: string) => {
     setIsLoading(true)
     try {
       const token = localStorage.getItem("token")
@@ -70,7 +65,15 @@ export default function Analytics() {
     } finally {
       setIsLoading(false)
     }
-  }
+    },
+    [router, useCustomDateRange],
+  )
+
+  useEffect(() => {
+    if (!useCustomDateRange) {
+      fetchAnalytics(selectedPeriod)
+    }
+  }, [selectedPeriod, useCustomDateRange, fetchAnalytics])
 
   const handleCustomDateFilter = () => {
     if (startDate && endDate) {

@@ -19,7 +19,8 @@ import {
   Package, 
   Receipt, 
   BarChart3, 
-  CreditCard, 
+  CreditCard,
+  Bot,
   ShieldCheck 
 } from "lucide-react"
 import axios from "axios"
@@ -31,6 +32,7 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userEmail, setUserEmail] = useState("")
+  const [lowStockCount, setLowStockCount] = useState(0)
   const router = useRouter()
 
   useEffect(() => {
@@ -109,6 +111,22 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
     }
   }
 
+  const fetchLowStockCount = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) return
+      const response = await fetch("/api/alerts/low-stock", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setLowStockCount(Number(data.total || 0))
+      }
+    } catch (error) {
+      console.error("Error fetching low stock count:", error)
+    }
+  }
+
   const handleLogout = async () => {
     try {
       const token = localStorage.getItem("token")
@@ -164,6 +182,11 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  useEffect(() => {
+    if (!isLoggedIn) return
+    fetchLowStockCount()
+  }, [isLoggedIn])
+
   if (!isLoggedIn) {
     return <>{children}</>
   }
@@ -171,6 +194,7 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
   // Navigation links with icons
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: "/assistant", label: "AI Assistant", icon: <Bot className="w-5 h-5" />, showAlertBadge: true },
     { href: "/inventory", label: "Inventory", icon: <Package className="w-5 h-5" /> },
     { href: "/billing", label: "Billing", icon: <Receipt className="w-5 h-5" /> },
     { href: "/reports", label: "Reports", icon: <BarChart3 className="w-5 h-5" /> },
@@ -205,10 +229,15 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
                 <Link 
                   key={link.href}
                   href={link.href} 
-                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 flex items-center space-x-1"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 flex items-center space-x-1 relative"
                 >
                   {link.icon}
                   <span>{link.label}</span>
+                  {link.showAlertBadge && lowStockCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-600 text-white text-xs font-semibold h-5 min-w-[20px] px-1">
+                      {lowStockCount}
+                    </span>
+                  )}
                 </Link>
               ))}
 
@@ -296,6 +325,11 @@ export default function NavbarLayout({ children }: { children: React.ReactNode }
                 >
                   {link.icon}
                   <span className="ml-2">{link.label}</span>
+                  {link.showAlertBadge && lowStockCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-600 text-white text-xs font-semibold h-5 min-w-[20px] px-1">
+                      {lowStockCount}
+                    </span>
+                  )}
                 </Link>
               ))}
 
