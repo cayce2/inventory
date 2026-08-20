@@ -117,8 +117,8 @@ export default function Home() {
 
           <div className="flex flex-wrap gap-3 justify-center items-center">
             <a
-              href="https://expo.dev/artifacts/eas/b4FXPseyj2XC84Ph9wKBhE.apk"
-              download="stockske.apk"
+              href="/StocksKE_v2.0.0.apk"
+              download="StocksKE_v2.0.0.apk"
               className="inline-flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-full border border-green-200/50 shadow-sm hover:bg-white/80 transition-all"
             >
               <Smartphone className="w-4 h-4 text-green-600" />
