@@ -3,17 +3,22 @@
 
 import { useState, useEffect } from "react"
 import axios from "axios"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
 
 export default function Subscription() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<"active" | "inactive" | "expired">("inactive")
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     checkSubscriptionStatus()
+    const status = searchParams.get("status")
+    if (status === "success") setStatusMessage({ type: "success", text: "Payment successful! Your subscription is now active." })
+    else if (status === "failed") setStatusMessage({ type: "error", text: "Payment failed or was cancelled. Please try again." })
   }, [])
 
   const checkSubscriptionStatus = async () => {
@@ -33,30 +38,23 @@ export default function Subscription() {
     }
   }
 
-  const initiatePayment = async () => {
+  const handleSubscriptionAction = async () => {
     try {
+      setLoading(true)
       const token = localStorage.getItem("token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
-      const response = await axios.post(
-        "/api/subscription/initiate",
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      )
-      if (response.data.success) {
-        setShowPaymentModal(true)
+      if (!token) { router.push("/login"); return }
+      const response = await axios.post("/api/subscription/initiate", {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.data.paymentUrl) {
+        window.location.href = response.data.paymentUrl
       }
     } catch (error) {
       console.error("Error initiating payment:", error)
+      setStatusMessage({ type: "error", text: "Failed to initiate payment. Please try again." })
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const handleSubscriptionAction = async () => {
-    await initiatePayment()
   }
 
   const getStatusBadge = () => {
@@ -85,105 +83,19 @@ export default function Subscription() {
     }
   }
 
-  // Payment Modal Component
-  const PaymentModal = () => {
-    if (!showPaymentModal) return null
-
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-          {/* Modal Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">Complete Payment</h3>
-            </div>
-            <button
-              onClick={() => setShowPaymentModal(false)}
-              className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
-            >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Modal Content */}
-          <div className="p-6">
-            <div className="text-center mb-6">
-              <p className="text-gray-600">Follow these steps to complete your {subscriptionStatus === "expired" ? "renewal" : "subscription"} via M-PESA</p>
-            </div>
-
-            {/* Payment Steps */}
-            <div className="space-y-4 mb-6">
-              {[
-                "Open M-PESA menu on your phone",
-                "Select 'Lipa na M-PESA'",
-                "Choose 'Pay Bill'",
-                "Enter Business Number: 3012364",
-                "Account Number: Your registered email",
-                "Amount: 2000 KES",
-                "Enter PIN and confirm"
-              ].map((step, index) => (
-                <div key={index} className="flex items-start gap-4 p-3 bg-gray-50 rounded-xl">
-                  <div className="w-7 h-7 bg-orange-200 text-orange-800 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                    {index + 1}
-                  </div>
-                  <p className="text-gray-800 font-medium text-sm">{step}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Important Notice */}
-            <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <h4 className="font-semibold text-blue-900 text-sm mb-1">Activation Timeline</h4>
-                  <p className="text-sm text-blue-800">
-                    Your subscription will be activated within 24 hours after payment confirmation.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-xl transition-colors duration-200"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false)
-                  // Optionally refresh subscription status after some time
-                  setTimeout(() => {
-                    checkSubscriptionStatus()
-                  }, 1000)
-                }}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200"
-              >
-                Payment Sent
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
+          {statusMessage && (
+            <div className={`mb-6 p-4 rounded-xl border text-sm font-medium ${
+              statusMessage.type === "success"
+                ? "bg-green-50 border-green-200 text-green-800"
+                : "bg-red-50 border-red-200 text-red-800"
+            }`}>
+              {statusMessage.text}
+            </div>
+          )}
           {/* Modern Header */}
           <div className="mb-12">
             <div className="flex items-center gap-3 mb-3">
@@ -243,12 +155,13 @@ export default function Subscription() {
                       <p className="text-gray-600 mb-8 max-w-md mx-auto">Your subscription is active and you have full access to all InventoryPro features.</p>
                       <button
                         onClick={handleSubscriptionAction}
-                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95"
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
-                        Extend Subscription
+                        {loading ? "Redirecting..." : "Extend Subscription"}
                       </button>
                     </div>
                   ) : (
@@ -270,9 +183,10 @@ export default function Subscription() {
                       <div className="space-y-4">
                         <button
                           onClick={handleSubscriptionAction}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 text-lg transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-600/25"
+                          disabled={loading}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 text-lg transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-600/25"
                         >
-                          {subscriptionStatus === "expired" ? "Renew Subscription" : "Subscribe Now"}
+                          {loading ? "Redirecting to Paystack..." : subscriptionStatus === "expired" ? "Renew Subscription" : "Subscribe Now"}
                         </button>
                         <p className="text-center text-sm text-gray-500">30-day money-back guarantee</p>
                       </div>
@@ -323,8 +237,6 @@ export default function Subscription() {
           </div>
         </div>
 
-        {/* Payment Modal */}
-        <PaymentModal />
       </div>
     </NavbarLayout>
   )
