@@ -1,33 +1,39 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import axios from "axios"
 import { useRouter, useSearchParams } from "next/navigation"
 import NavbarLayout from "@/components/NavbarLayout"
 
-export default function Subscription() {
+function SearchParamsHandler({ onStatus }: { onStatus: (status: string | null) => void }) {
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    onStatus(searchParams?.get("status") ?? null)
+  }, [searchParams])
+  return null
+}
+
+function SubscriptionContent() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<"active" | "inactive" | "expired">("inactive")
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
+
+  const handlePaymentStatus = (status: string | null) => {
+    if (status === "success") setStatusMessage({ type: "success", text: "Payment successful! Your subscription is now active." })
+    else if (status === "failed") setStatusMessage({ type: "error", text: "Payment failed or was cancelled. Please try again." })
+  }
 
   useEffect(() => {
     checkSubscriptionStatus()
-    const status = searchParams.get("status")
-    if (status === "success") setStatusMessage({ type: "success", text: "Payment successful! Your subscription is now active." })
-    else if (status === "failed") setStatusMessage({ type: "error", text: "Payment failed or was cancelled. Please try again." })
   }, [])
 
   const checkSubscriptionStatus = async () => {
     try {
       const token = localStorage.getItem("token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
+      if (!token) { router.push("/login"); return }
       const response = await axios.get("/api/subscription/status", {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -59,21 +65,21 @@ export default function Subscription() {
 
   const getStatusBadge = () => {
     switch (subscriptionStatus) {
-      case "active": 
+      case "active":
         return (
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium border border-green-200">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             Active
           </div>
         )
-      case "expired": 
+      case "expired":
         return (
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-sm font-medium border border-red-200">
             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
             Expired
           </div>
         )
-      default: 
+      default:
         return (
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-sm font-medium border border-orange-200">
             <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
@@ -86,6 +92,9 @@ export default function Subscription() {
   return (
     <NavbarLayout>
       <div className="min-h-screen bg-gray-50">
+        <Suspense fallback={null}>
+          <SearchParamsHandler onStatus={handlePaymentStatus} />
+        </Suspense>
         <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
           {statusMessage && (
             <div className={`mb-6 p-4 rounded-xl border text-sm font-medium ${
@@ -96,7 +105,6 @@ export default function Subscription() {
               {statusMessage.text}
             </div>
           )}
-          {/* Modern Header */}
           <div className="mb-12">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -110,7 +118,6 @@ export default function Subscription() {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Status Card - Redesigned */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl border border-gray-200/50 shadow-sm overflow-hidden">
                 <div className="p-8">
@@ -133,10 +140,10 @@ export default function Subscription() {
                         <div>
                           <p className="text-sm font-medium text-gray-500 mb-1">{subscriptionStatus === "active" ? "Renews on" : "Expired on"}</p>
                           <p className="text-lg font-semibold text-gray-900">
-                            {new Date(subscriptionEndDate).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
+                            {new Date(subscriptionEndDate).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
                             })}
                           </p>
                         </div>
@@ -175,10 +182,9 @@ export default function Subscription() {
                         {subscriptionStatus === "expired" ? "Subscription Expired" : "Get Started Today"}
                       </h3>
                       <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                        {subscriptionStatus === "expired" 
-                          ? "Renew your subscription to continue accessing all features." 
-                          : "Subscribe now to unlock all InventoryPro features and start managing your inventory like a pro."
-                        }
+                        {subscriptionStatus === "expired"
+                          ? "Renew your subscription to continue accessing all features."
+                          : "Subscribe now to unlock all InventoryPro features and start managing your inventory like a pro."}
                       </p>
                       <div className="space-y-4">
                         <button
@@ -196,9 +202,7 @@ export default function Subscription() {
               </div>
             </div>
 
-            {/* Sidebar */}
             <div className="space-y-6">
-              {/* Pricing Card */}
               <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-sm">
                 <div className="text-center mb-6">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">Monthly Plan</h3>
@@ -210,7 +214,6 @@ export default function Subscription() {
                 </div>
               </div>
 
-              {/* Features List */}
               <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">What&apos;s Included</h3>
                 <div className="space-y-4">
@@ -219,7 +222,7 @@ export default function Subscription() {
                     { icon: "🎯", title: "Smart Dashboard", desc: "Actionable insights at a glance" },
                     { icon: "💸", title: "Billing & Invoicing", desc: "Seamless financial management" },
                     { icon: "📈", title: "Financial Reports", desc: "Comprehensive analytics" },
-                    { icon: "🎧", title: "Priority Support", desc: "Get help when you need it" }
+                    { icon: "🎧", title: "Priority Support", desc: "Get help when you need it" },
                   ].map((feature, index) => (
                     <div key={index} className="flex items-start gap-3">
                       <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-sm flex-shrink-0">
@@ -236,8 +239,11 @@ export default function Subscription() {
             </div>
           </div>
         </div>
-
       </div>
     </NavbarLayout>
   )
+}
+
+export default function Subscription() {
+  return <SubscriptionContent />
 }
