@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import Link from "next/link"
 
 export default function PrivacyPolicyPage() {
   const [activeSection, setActiveSection] = useState("1");
@@ -8,42 +9,42 @@ export default function PrivacyPolicyPage() {
     {
       id: "1",
       title: "Information We Collect",
-      content: "We collect information you provide directly to us, such as when you create an account, update your profile, use our interactive features, or contact us for support. This may include your name, email, phone number, and business information."
+      content: "We collect information you provide directly to us when you create a StocksKE account, update your profile, use our inventory management features, or contact us for support. This may include your name, email address, phone number, and business information such as your company name, product data, and sales records."
     },
     {
       id: "2",
       title: "How We Use Your Information",
-      content: "We use the information we collect to provide, maintain, and improve our services, to process your transactions, to send you technical notices and support messages, and to respond to your comments and questions."
+      content: "We use the information we collect to provide, maintain, and improve StocksKE services, to process your transactions, send you technical notices and support messages, and to respond to your comments and questions. We may also use your information to send you product updates and promotional communications (you can opt out at any time in your account settings)."
     },
     {
       id: "3",
       title: "Information Sharing and Disclosure",
-      content: "We do not share your personal information with third parties except as described in this policy. We may share your information with service providers who perform services on our behalf, or when required by law."
+      content: "We do not sell your personal information. We may share your information with trusted service providers who perform services on our behalf (such as payment processors and cloud hosting providers), or when required by Kenyan law or regulation."
     },
     {
       id: "4",
       title: "Data Security",
-      content: "We use reasonable measures to help protect your personal information from loss, theft, misuse, unauthorized access, disclosure, alteration, and destruction."
+      content: "We use industry-standard security measures including encryption in transit (HTTPS), hashed passwords, and secure database access controls to help protect your personal information from unauthorized access, disclosure, alteration, and destruction."
     },
     {
       id: "5",
-      title: "Your Choices",
-      content: "You may update, correct, or delete your account information at any time by logging into your account. You may also contact us to request access to, correction of, or deletion of any personal information that you have provided to us."
+      title: "Your Rights & Data Deletion",
+      content: "You have the right to access, correct, or delete your personal data at any time. You can update your profile in Settings, or submit a formal account deletion request. Upon deletion, your data will be permanently removed from our systems within 30 days. You may also email us directly to request data export or deletion."
     },
     {
       id: "6",
       title: "Cookies",
-      content: "We use cookies and similar technologies to collect information about how you use our service and to remember your preferences."
+      content: "StocksKE uses cookies and similar technologies to keep you signed in, remember your preferences, and understand how you use our service. You can control cookie settings through your browser, but disabling cookies may limit some features."
     },
     {
       id: "7",
       title: "Changes to this Policy",
-      content: "We may change this privacy policy from time to time. If we make changes, we will notify you by revising the date at the top of the policy."
+      content: "We may update this privacy policy from time to time. If we make significant changes, we will notify you via email or an in-app notification and update the date at the top of this policy."
     },
     {
       id: "8",
       title: "Contact Us",
-      content: "If you have any questions about this privacy policy, please contact us at [Your Contact Information]."
+      content: "If you have any questions about this privacy policy or wish to exercise your data rights, please contact us at support@stockske.com or through our in-app support chat."
     }
   ];
 
@@ -54,7 +55,8 @@ export default function PrivacyPolicyPage() {
             {/* Header with gradient background */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 text-white">
               <h1 className="text-3xl font-bold">Privacy Policy</h1>
-              <p className="text-blue-100 mt-2">Last updated: March 10, 2025</p>
+              <p className="text-blue-100 mt-1">StocksKE — Inventory Management</p>
+              <p className="text-blue-200 text-sm mt-2">Last updated: October 9, 2025</p>
             </div>
 
             <div className="lg:flex">
@@ -77,6 +79,18 @@ export default function PrivacyPolicyPage() {
                       </li>
                     ))}
                   </ul>
+
+                  {/* Delete Account Quick Link */}
+                  <div className="mt-6 pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2 px-1">Account Actions</p>
+                    <Link
+                      href="/delete-account"
+                      className="flex items-center w-full text-left px-4 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <span className="mr-2">🗑</span>
+                      Delete My Account
+                    </Link>
+                  </div>
                 </nav>
               </div>
 
@@ -103,12 +117,29 @@ export default function PrivacyPolicyPage() {
                     </section>
                   ))}
 
-                  <div className="mt-10 pt-6 border-t border-gray-200">
+                  {/* Delete Account Banner */}
+                  <div className="mt-6 mb-8 p-5 bg-red-50 border border-red-100 rounded-lg">
+                    <h3 className="font-semibold text-red-800 mb-1">Want to delete your account?</h3>
+                    <p className="text-sm text-red-700 mb-3">
+                      You can request permanent deletion of your StocksKE account and all associated data. This action is irreversible.
+                    </p>
+                    <Link
+                      href="/delete-account"
+                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Request Account Deletion
+                    </Link>
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-gray-200">
                     <div className="flex flex-col sm:flex-row items-center justify-between bg-blue-50 p-4 rounded-lg">
                       <p className="text-gray-600 mb-4 sm:mb-0">Still have questions about our privacy practices?</p>
-                      <button className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+                      <Link
+                        href="/support"
+                        className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                      >
                         Contact Us
-                      </button>
+                      </Link>
                     </div>
                   </div>
                 </div>

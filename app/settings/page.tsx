@@ -18,8 +18,10 @@ import {
   EyeOff,
   Bell,
   Settings as SettingsIcon,
-  Users
+  Users,
+  Trash2
 } from "lucide-react"
+import Link from "next/link"
 
 export default function Settings() {
   const [name, setName] = useState("")
@@ -351,6 +353,26 @@ export default function Settings() {
                       </button>
                     </div>
                   </form>
+
+                  {/* Danger Zone */}
+                  <div className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-3">Danger Zone</h3>
+                    <div className="flex items-start justify-between bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Delete Account</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Permanently delete your account and all associated data. This action cannot be undone.
+                        </p>
+                      </div>
+                      <Link
+                        href="/delete-account"
+                        className="ml-4 flex-shrink-0 inline-flex items-center px-3 py-1.5 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" />
+                        Delete Account
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               )}
 
