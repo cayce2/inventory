@@ -354,8 +354,11 @@ async function getComparisonData(db: any, userId: string) {
       },
     ]).toArray(),
 
-    // Full inventory for slow-moving detection and stock value
-    db.collection("inventory").find({ userId }).toArray(),
+    // Full inventory for slow-moving detection and stock value (project to exclude large base64 images)
+    db.collection("inventory")
+      .find({ userId })
+      .project({ _id: 1, name: 1, quantity: 1, price: 1, updatedAt: 1 })
+      .toArray(),
 
     // Invoice-level stats (avg sale value, collection rate)
     db.collection("invoices").aggregate([
