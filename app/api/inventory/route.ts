@@ -6,6 +6,9 @@ import { ObjectId } from "mongodb"
 import sharp from "sharp"
 import { inventoryItemSchema, restockSchema, deleteItemSchema } from "@/lib/validations"
 
+export const maxDuration = 60
+export const dynamic = "force-dynamic"
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)

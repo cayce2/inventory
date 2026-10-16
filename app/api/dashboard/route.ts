@@ -5,6 +5,9 @@ import { format, subMonths, startOfMonth, endOfMonth } from "date-fns"
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+export const maxDuration = 60
+export const dynamic = "force-dynamic"
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await authMiddleware(req)

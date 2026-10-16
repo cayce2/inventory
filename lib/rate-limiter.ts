@@ -22,6 +22,7 @@ try {
 // Rate limit configuration
 const RATE_LIMIT_REQUESTS = 10000000 // Number of requests allowed
 const RATE_LIMIT_WINDOW = 60 * 60 // Time window in seconds (1 hour)
+const REDIS_TIMEOUT_MS = 1500 // 1.5s max wait time to avoid hanging serverless functions
 
 export async function rateLimiter(req: NextRequest, identifier?: string) {
   // If Redis is not available, skip rate limiting
@@ -34,27 +35,42 @@ export async function rateLimiter(req: NextRequest, identifier?: string) {
   const key = `rate-limit:${ip}`
 
   try {
-    // Get current count for this IP
-    const currentCount = (await redis.get(key)) as number | null
+    const timeoutPromise = new Promise<{ isTimeout: true }>((resolve) =>
+      setTimeout(() => resolve({ isTimeout: true }), REDIS_TIMEOUT_MS)
+    )
 
-    if (currentCount === null) {
-      // First request, set count to 1 with expiry
-      await redis.set(key, 1, { ex: RATE_LIMIT_WINDOW })
-      return { success: true, remaining: RATE_LIMIT_REQUESTS - 1 }
+    const redisTask = (async () => {
+      // Get current count for this IP
+      const currentCount = (await redis!.get(key)) as number | null
+
+      if (currentCount === null) {
+        // First request, set count to 1 with expiry
+        await redis!.set(key, 1, { ex: RATE_LIMIT_WINDOW })
+        return { success: true, remaining: RATE_LIMIT_REQUESTS - 1 }
+      }
+
+      if (currentCount >= RATE_LIMIT_REQUESTS) {
+        // Rate limit exceeded
+        return { success: false, remaining: 0 }
+      }
+
+      // Increment count
+      const newCount = await redis!.incr(key)
+      return { success: true, remaining: RATE_LIMIT_REQUESTS - newCount }
+    })()
+
+    const result = await Promise.race([redisTask, timeoutPromise])
+
+    if ("isTimeout" in result) {
+      console.warn("Upstash Redis rate limit check timed out, failing open to prevent 504")
+      return { success: true, remaining: RATE_LIMIT_REQUESTS }
     }
 
-    if (currentCount >= RATE_LIMIT_REQUESTS) {
-      // Rate limit exceeded
-      return { success: false, remaining: 0 }
-    }
-
-    // Increment count
-    const newCount = await redis.incr(key)
-    return { success: true, remaining: RATE_LIMIT_REQUESTS - newCount }
+    return result
   } catch (error) {
     console.error("Rate limiter error:", error)
     // If rate limiter fails, allow the request to proceed
-    return { success: true, remaining: 0 }
+    return { success: true, remaining: RATE_LIMIT_REQUESTS }
   }
 }
 
@@ -71,4 +87,3 @@ export async function rateLimit(req: NextRequest, identifier?: string) {
 
   return null
 }
-

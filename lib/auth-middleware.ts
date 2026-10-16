@@ -1,15 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import type { NextRequest } from "next/server"
 import jwt from "jsonwebtoken"
-import { rateLimit } from "./rate-limiter"
 
 export async function authMiddleware(req: NextRequest) {
-  // Apply rate limiting to authentication requests
-  const rateLimitResponse = await rateLimit(req)
-  if (rateLimitResponse) {
-    return null
-  }
-
   const token = req.headers.get("Authorization")?.split(" ")[1]
 
   if (!token) {
@@ -39,4 +32,3 @@ export function generateToken(userId: string, email: string, role: string) {
     },
   )
 }
-
