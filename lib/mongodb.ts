@@ -1,4 +1,4 @@
-import { MongoClient } from "mongodb"
+import { MongoClient, MongoClientOptions } from "mongodb"
 import dns from "dns"
 
 // Fix DNS resolution for Windows/Node.js
@@ -24,9 +24,20 @@ const getClientPromise = () => {
     return clientPromise
   }
 
-  const options = process.env.NODE_ENV === "development" 
-    ? { family: 4 } // Force IPv4 in development
-    : {}
+  const baseOptions: MongoClientOptions = {
+    // Fail fast if the cluster is unreachable — prevents hanging past Vercel's 10 s limit
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
+    socketTimeoutMS: 8000,
+    // Reuse connections across warm invocations
+    maxPoolSize: 10,
+    minPoolSize: 1,
+  }
+
+  const options: MongoClientOptions =
+    process.env.NODE_ENV === "development"
+      ? { ...baseOptions, family: 4 } // Force IPv4 in development
+      : baseOptions
 
   if (process.env.NODE_ENV === "development") {
     // Preserve the promise across HMR reloads in dev.
