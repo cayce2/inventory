@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const client = await clientPromise
     const db = client.db("inventory_management")
 
-    // ─── Run independent top-level queries in parallel ───────────────────────
+    // ─── Run independent top-level queries in parallel ────────────────────────
     const [
       totalItems,
       lowStockItems,
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         .project({ _id: 1, name: 1, quantity: 1 })
         .toArray(),
 
-      // 3. Invoice totals — use aggregation instead of fetching all docs
+      // 3. Invoice totals via aggregation (no need to load all docs into JS)
       db.collection("invoices").aggregate([
         { $match: { userId, deleted: { $ne: true } } },
         {
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         month: format(subMonths(new Date(), 1), 'yyyy-MM'),
       }),
 
-      // 6. Monthly revenue trend — single aggregation replaces 6 serial queries
+      // 6. Monthly revenue trend — one aggregation per month but all in parallel
       generateMonthlyRevenueTrend(db, userId, 6, monthOffset),
 
       // 7. Revenue by category
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
     }
 
     let unpaidInvoiceTrend: number | null = null
-    if (previousMonthInvoiceData?.unpaidCount !== undefined) {
+    if (previousMonthInvoiceData != null && previousMonthInvoiceData.unpaidCount !== undefined) {
       const prev = previousMonthInvoiceData.unpaidCount
       if (prev > 0) {
         unpaidInvoiceTrend = parseFloat(((unpaidInvoicesCount - prev) / prev * 100).toFixed(1))
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
       ),
     ]).catch((err) => console.error("History upsert failed (non-critical):", err))
 
-    // ─── Build comparison data from already-fetched inventory ────────────────
+    // ─── Comparison data ──────────────────────────────────────────────────────
     const comparisonData = await getComparisonData(db, userId)
 
     return NextResponse.json(
@@ -164,95 +164,88 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Generate monthly revenue trend using a single $facet aggregation
- * instead of N sequential queries.
+ * Generate monthly revenue trend.
+ * Runs all months in parallel (Promise.all) instead of sequentially.
+ * Avoids $facet with hyphenated keys which MongoDB rejects.
  */
 async function generateMonthlyRevenueTrend(db: any, userId: string, monthCount = 6, offset = 0) {
   const currentDate = new Date()
 
-  // Build month boundaries for the requested window
   const months = Array.from({ length: monthCount }, (_, i) => {
     const targetMonth = subMonths(currentDate, (monthCount - 1 - i) + offset)
     return {
       label: format(targetMonth, 'MMM yyyy'),
-      key: format(targetMonth, 'yyyy-MM'),
       start: startOfMonth(targetMonth),
       end: endOfMonth(targetMonth),
     }
   })
 
-  // One aggregation with $facet — one round-trip regardless of monthCount
-  const facetStages: Record<string, any[]> = {}
-  for (const m of months) {
-    facetStages[m.key] = [
-      {
-        $match: {
-          userId,
-          status: "paid",
-          deleted: { $ne: true },
-          createdAt: { $gte: m.start, $lte: m.end },
+  // Run all months in parallel — each is a cheap indexed aggregation
+  const results = await Promise.all(
+    months.map((m) =>
+      db.collection("invoices").aggregate([
+        {
+          $match: {
+            userId,
+            status: "paid",
+            deleted: { $ne: true },
+            createdAt: { $gte: m.start, $lte: m.end },
+          },
         },
-      },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]
-  }
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]).toArray()
+    )
+  )
 
-  const [result] = await db.collection("invoices").aggregate([{ $facet: facetStages }]).toArray()
-
-  return months.map((m) => ({
+  return months.map((m, i) => ({
     name: m.label,
-    value: (result?.[m.key]?.[0]?.total as number) ?? 0,
+    value: (results[i][0]?.total as number) ?? 0,
   }))
 }
 
 /**
- * Revenue distribution by product category — single aggregation pipeline
- * instead of one DB query per category.
+ * Revenue distribution by product category.
+ * Items are embedded in invoices (invoice.items), so we aggregate
+ * directly from invoices — no separate invoice_items collection needed.
  */
 async function calculateRevenueByCategory(db: any, userId: string) {
-  const result = await db.collection("inventory").aggregate([
-    { $match: { userId, categoryId: { $exists: true } } },
+  // Fetch paid invoices and group revenue by categoryId via the embedded items array
+  const result = await db.collection("invoices").aggregate([
+    { $match: { userId, status: "paid", deleted: { $ne: true } } },
+    { $unwind: "$items" },
+    // Join inventory to get the categoryId for each line item
+    {
+      $lookup: {
+        from: "inventory",
+        localField: "items.itemId",
+        foreignField: "_id",
+        as: "product",
+      },
+    },
+    { $unwind: { path: "$product", preserveNullAndEmptyArrays: false } },
+    // Only items that belong to a category
+    { $match: { "product.categoryId": { $exists: true } } },
     // Join categories
     {
       $lookup: {
         from: "inventory_categories",
-        localField: "categoryId",
+        localField: "product.categoryId",
         foreignField: "_id",
         as: "category",
       },
     },
-    { $unwind: { path: "$category", preserveNullAndEmpty: false } },
-    // Join invoice_items for this product
-    {
-      $lookup: {
-        from: "invoice_items",
-        let: { pid: "$_id", uid: "$userId" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$productId", "$$pid"] },
-                  { $eq: ["$userId", "$$uid"] },
-                ],
-              },
-            },
-          },
-        ],
-        as: "salesItems",
-      },
-    },
+    { $unwind: { path: "$category", preserveNullAndEmptyArrays: false } },
+    // Group by category and sum revenue
     {
       $group: {
         _id: "$category._id",
         name: { $first: "$category.name" },
         value: {
           $sum: {
-            $reduce: {
-              input: "$salesItems",
-              initialValue: 0,
-              in: { $add: ["$$value", { $multiply: ["$$this.price", "$$this.quantity"] }] },
-            },
+            $multiply: [
+              { $ifNull: ["$items.adjustedPrice", "$items.price"] },
+              "$items.quantity",
+            ],
           },
         },
       },
@@ -261,7 +254,7 @@ async function calculateRevenueByCategory(db: any, userId: string) {
   ]).toArray()
 
   if (result.length === 0) {
-    // Fallback: derive from total paid income
+    // Fallback: derive placeholder split from total paid income
     const [agg] = await db.collection("invoices").aggregate([
       { $match: { userId, status: "paid", deleted: { $ne: true } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
@@ -279,7 +272,7 @@ async function calculateRevenueByCategory(db: any, userId: string) {
 }
 
 /**
- * Calculate business KPIs using aggregations instead of full document fetches.
+ * Calculate business KPIs using targeted aggregations.
  */
 async function calculateKPIs(db: any, userId: string) {
   const [salesAgg, inventoryAgg, annualTarget, revAgg, invoiceCountAgg, warehouseCapacity] = await Promise.all([
@@ -333,19 +326,27 @@ async function calculateKPIs(db: any, userId: string) {
 }
 
 /**
- * Get comparison data (fast/slow items, stock value, avg sale) using
- * aggregations — avoids loading the entire inventory into memory for sorting.
+ * Comparison data: fast/slow-moving items, stock value, avg sale, collection rate.
+ * Reads invoice items from the embedded invoice.items array (not a separate collection).
  */
 async function getComparisonData(db: any, userId: string) {
-  const [invoiceItems, inventory, invoiceStats] = await Promise.all([
-    // Aggregate invoice items grouped by product
-    db.collection("invoice_items").aggregate([
-      { $match: { userId } },
+  const [salesByProduct, inventory, invoiceStats] = await Promise.all([
+    // Aggregate sales per product from embedded invoice items
+    db.collection("invoices").aggregate([
+      { $match: { userId, deleted: { $ne: true } } },
+      { $unwind: "$items" },
       {
         $group: {
-          _id: "$productId",
-          totalQuantity: { $sum: "$quantity" },
-          totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } },
+          _id: "$items.itemId",
+          totalQuantity: { $sum: "$items.quantity" },
+          totalRevenue: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ["$items.adjustedPrice", "$items.price"] },
+                "$items.quantity",
+              ],
+            },
+          },
         },
       },
     ]).toArray(),
@@ -367,9 +368,11 @@ async function getComparisonData(db: any, userId: string) {
     ]).toArray(),
   ])
 
-  const itemsWithSales = invoiceItems
+  const itemsWithSales = salesByProduct
     .map((item: any) => {
-      const inventoryItem = inventory.find((inv: any) => inv._id.toString() === item._id?.toString())
+      const inventoryItem = inventory.find(
+        (inv: any) => inv._id.toString() === item._id?.toString()
+      )
       if (!inventoryItem) return null
       return {
         _id: item._id,
@@ -385,7 +388,7 @@ async function getComparisonData(db: any, userId: string) {
     .sort((a: any, b: any) => b.soldQuantity - a.soldQuantity)
     .slice(0, 5)
 
-  const soldProductIds = new Set(invoiceItems.map((item: any) => item._id?.toString()))
+  const soldProductIds = new Set(salesByProduct.map((item: any) => item._id?.toString()))
   const slowMovingItems = inventory
     .filter((item: any) =>
       !soldProductIds.has(item._id.toString()) ||
@@ -393,7 +396,9 @@ async function getComparisonData(db: any, userId: string) {
     )
     .map((item: any) => {
       const sales = itemsWithSales.find((s: any) => s._id?.toString() === item._id.toString())
-      const daysSinceUpdate = Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+      const daysSinceUpdate = Math.floor(
+        (Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
+      )
       return {
         _id: item._id,
         name: item.name,
@@ -405,7 +410,10 @@ async function getComparisonData(db: any, userId: string) {
     .sort((a: any, b: any) => a.soldQuantity - b.soldQuantity)
     .slice(0, 5)
 
-  const stockValue = inventory.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0)
+  const stockValue = inventory.reduce(
+    (sum: number, item: any) => sum + (item.quantity * item.price),
+    0
+  )
   const stats = invoiceStats[0] ?? { totalCount: 0, totalRevenue: 0, paidCount: 0 }
   const avgSaleValue = stats.totalCount > 0 ? stats.totalRevenue / stats.totalCount : 0
   const collectionRate = stats.totalCount > 0 ? (stats.paidCount / stats.totalCount) * 100 : 0
